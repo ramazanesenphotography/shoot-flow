@@ -674,46 +674,46 @@ export default function App() {
                 </div>
               ) : (
                 <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-12 text-center text-slate-400">Select a client to view details.</div>
-              )}
-            </div>
+            )}
           </div>
-        )}
-      </main>
+        </div>
+      )}
+    </main>
 
-      {isClientModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-base font-bold text-slate-100 mb-4">Create New Client</h2>
-            <form onSubmit={handleClientSubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-400 mb-1">Client Avatar / Photo</label>
-                <input type="file" accept="image/*" onChange={handleFileChange} className="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer bg-slate-900 border border-slate-700 rounded-lg p-1" />
-              </div>
-              <div>
-                <label className="block text-slate-400 mb-1">Full Name / Company *</label>
-                <input type="text" name="name" required placeholder="Full Name or Company Name" value={clientFormData.name} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              </div>
-              <div>
-                <label className="block text-slate-400 mb-1">Phone</label>
-                <input type="text" name="phone" placeholder="+90 (555) 000 00 00" value={clientFormData.phone} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              </div>
-              <div>
-                <label className="block text-slate-400 mb-1">Email</label>
-                <input type="email" name="email" placeholder="example@domain.com" value={clientFormData.email} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              </div>
-              <div>
-                <label className="block text-slate-400 mb-1">Address</label>
-                <input type="text" name="address" placeholder="Full address details" value={clientFormData.address} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              </div>
-              <div>
-                <label className="block text-slate-400 mb-1">Client Notes</label>
-                <textarea name="notes" placeholder="Special notes about the client..." rows={3} value={clientFormData.notes} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100 resize-none" />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setIsClientModalOpen(false)} className="w-1/2 py-2 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 transition">Cancel</button>
-                <button type="submit" disabled={uploadingAvatar} className="w-1/2 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-white transition">{uploadingAvatar ? 'Uploading...' : 'Save'}</button>
-              </div>
-          </form>
+    {isClientModalOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+          <h2 className="text-base font-bold text-slate-100 mb-4">Create New Client</h2>
+          <form onSubmit={handleClientSubmit} className="space-y-3 text-xs">
+            <div>
+              <label className="block text-slate-400 mb-1">Client Avatar / Photo</label>
+              <input type="file" accept="image/*" onChange={handleFileChange} className="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer bg-slate-900 border border-slate-700 rounded-lg p-1" />
+            </div>
+            <div>
+              <label className="block text-slate-400 mb-1">Full Name / Company *</label>
+              <input type="text" name="name" required placeholder="Full Name or Company Name" value={clientFormData.name} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+            </div>
+            <div>
+              <label className="block text-slate-400 mb-1">Phone</label>
+              <input type="text" name="phone" placeholder="+90 (555) 000 00 00" value={clientFormData.phone} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+            </div>
+            <div>
+              <label className="block text-slate-400 mb-1">Email</label>
+              <input type="email" name="email" placeholder="example@domain.com" value={clientFormData.email} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+            </div>
+            <div>
+              <label className="block text-slate-400 mb-1">Address</label>
+              <input type="text" name="address" placeholder="Full address details" value={clientFormData.address} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+            </div>
+            <div>
+              <label className="block text-slate-400 mb-1">Client Notes</label>
+              <textarea name="notes" placeholder="Special notes about the client..." rows={3} value={clientFormData.notes} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100 resize-none" />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button type="button" onClick={() => setIsClientModalOpen(false)} className="w-1/2 py-2 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 transition">Cancel</button>
+              <button type="submit" disabled={uploadingAvatar} className="w-1/2 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-white transition">{uploadingAvatar ? 'Uploading...' : 'Save'}</button>
+            </div>
+        </form>
       </div>
     </div>
   )}
@@ -723,12 +723,51 @@ export default function App() {
       <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <h2 className="text-base font-bold text-slate-100 mb-4">{editingShootId ? 'Edit Shoot' : 'New Shoot'}</h2>
         <form onSubmit={handleShootSubmit} className="space-y-3 text-xs">
-          <select value={selectedClientId} onChange={handleClientSelectChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100"><option value="new">+ New Client</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-          <input type="text" name="client_name" required placeholder="Client Name" value={formData.client_name} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-          <input type="date" name="date" required value={formData.date} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-          <input type="number" name="price" placeholder="Price (₺)" value={formData.price} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-          <input type="url" name="drive_link" placeholder="Drive / Gallery Link" value={formData.drive_link} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-          <div className="flex gap-2 pt-2"><button type="button" onClick={() => setIsShootModalOpen(false)} className="w-1/2 py-2 bg-slate-700 rounded text-slate-200">Cancel</button><button type="submit" className="w-1/2 py-2 bg-indigo-600 rounded text-white">Save</button></div>
+          <div>
+            <label className="block text-slate-400 mb-1">Select Client</label>
+            <select value={selectedClientId} onChange={handleClientSelectChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100">
+              <option value="new">+ New Client</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-slate-400 mb-1">Client Name *</label>
+            <input type="text" name="client_name" required placeholder="Client Name" value={formData.client_name} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+          </div>
+          <div>
+            <label className="block text-slate-400 mb-1">Shoot Type</label>
+            <input type="text" name="shoot_type" placeholder="e.g. Portrait / Concept / Sport" value={formData.shoot_type} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-slate-400 mb-1">Date *</label>
+              <input type="date" name="date" required value={formData.date} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+            </div>
+            <div>
+              <label className="block text-slate-400 mb-1">Time</label>
+              <input type="time" name="time" value={formData.time} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-slate-400 mb-1">Location</label>
+            <input type="text" name="location" placeholder="Studio or Venue location" value={formData.location} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+          </div>
+          <div>
+            <label className="block text-slate-400 mb-1">Price (₺)</label>
+            <input type="number" name="price" placeholder="0.00" value={formData.price} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+          </div>
+          <div>
+            <label className="block text-slate-400 mb-1">Drive / Gallery Link</label>
+            <input type="url" name="drive_link" placeholder="https://..." value={formData.drive_link} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+          </div>
+          <div>
+            <label className="block text-slate-400 mb-1">Shoot Notes</label>
+            <textarea name="notes" placeholder="Special requests or notes for this shoot..." rows={2} value={formData.notes} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100 resize-none" />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={() => setIsShootModalOpen(false)} className="w-1/2 py-2 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 transition">Cancel</button>
+            <button type="submit" className="w-1/2 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-white transition">Save</button>
+          </div>
         </form>
       </div>
     </div>
