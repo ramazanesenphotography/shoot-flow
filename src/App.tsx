@@ -28,7 +28,9 @@ import {
   AlertCircle,
   ShieldCheck,
   RefreshCw,
-  Download
+  Download,
+  FileText,
+  Home
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 
@@ -37,6 +39,8 @@ interface Client {
   name: string;
   phone: string;
   email: string;
+  address?: string;
+  notes?: string;
   avatar_url?: string;
   created_at?: string;
 }
@@ -88,7 +92,7 @@ export default function App() {
   const [selectedClientId, setSelectedClientId] = useState<string>('new');
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
 
-  const [clientFormData, setClientFormData] = useState({ name: '', phone: '', email: '' });
+  const [clientFormData, setClientFormData] = useState({ name: '', phone: '', email: '', address: '', notes: '' });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
@@ -179,6 +183,9 @@ export default function App() {
 
       setShoots(shootsData || []);
       setClients(clientsData || []);
+      if (clientsData && clientsData.length > 0 && !selectedClientForDetail) {
+        setSelectedClientForDetail(clientsData[0]);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -220,7 +227,7 @@ export default function App() {
 
   const toggleExpand = (id: string) => { setExpandedShootId(expandedShootId === id ? null : id); };
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => { setFormData({ ...formData, [e.target.name]: e.target.value }); };
-  const handleClientInputChange = (e: React.ChangeEvent<HTMLInputElement>) => { setClientFormData({ ...clientFormData, [e.target.name]: e.target.value }); };
+  const handleClientInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { setClientFormData({ ...clientFormData, [e.target.name]: e.target.value }); };
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) setAvatarFile(e.target.files[0]); };
 
   const uploadAvatar = async (file: File): Promise<string | null> => {
@@ -267,7 +274,7 @@ export default function App() {
 
   const handleOpenAddClientModal = () => {
     setAvatarFile(null);
-    setClientFormData({ name: '', phone: '', email: '' });
+    setClientFormData({ name: '', phone: '', email: '', address: '', notes: '' });
     setIsClientModalOpen(true);
   };
 
@@ -279,7 +286,16 @@ export default function App() {
         const uploadedUrl = await uploadAvatar(avatarFile);
         if (uploadedUrl) avatarUrl = uploadedUrl;
       }
-      const { data: newClient, error } = await supabase.from('clients').insert([{ user_id: session.user.id, name: clientFormData.name, phone: clientFormData.phone, email: clientFormData.email, avatar_url: avatarUrl }]).select();
+      const { data: newClient, error } = await supabase.from('clients').insert([{ 
+        user_id: session.user.id, 
+        name: clientFormData.name, 
+        phone: clientFormData.phone, 
+        email: clientFormData.email, 
+        address: clientFormData.address, 
+        notes: clientFormData.notes, 
+        avatar_url: avatarUrl 
+      }]).select();
+      
       if (error) throw error;
       if (newClient && newClient[0]) {
         setClients(prev => [...prev, newClient[0]]);
@@ -550,19 +566,19 @@ export default function App() {
                           <div className="flex space-x-2">
                             {shoot.status !== 'completed' && <button onClick={(e) => handleStatusChange(shoot.id, 'completed', e)} className="px-2.5 py-1 bg-green-950 text-green-300 border border-green-800 rounded flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Complete</button>}
                             {shoot.status !== 'cancelled' && <button onClick={(e) => handleStatusChange(shoot.id, 'cancelled', e)} className="px-2.5 py-1 bg-red-950 text-red-300 border border-red-800 rounded flex items-center gap-1"><XCircle className="w-3 h-3" /> Cancel</button>}
-                          </div>
-                          <div className="flex space-x-1">
+                        </div>
+                        <div className="flex space-x-1">
                             <button onClick={(e) => handleOpenEditModal(shoot, e)} className="p-1.5 text-slate-400 hover:text-indigo-400"><Edit className="w-4 h-4" /></button>
                             <button onClick={(e) => handleDelete(shoot.id, e)} className="p-1.5 text-slate-400 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
-                          </div>
                         </div>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )
         )}
 
         {activeTab === 'clients' && (
@@ -580,9 +596,41 @@ export default function App() {
             </div>
             <div className="md:col-span-2">
               {selectedClientForDetail ? (
-                <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3">
-                  <h2 className="text-lg font-bold text-slate-100">{selectedClientForDetail.name}</h2>
-                  <p className="text-xs text-slate-400">{selectedClientForDetail.phone} • {selectedClientForDetail.email}</p>
+                <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-5">
+                  <div className="flex items-center space-x-4 border-b border-slate-700 pb-4">
+                    {selectedClientForDetail.avatar_url ? (
+                      <img src={selectedClientForDetail.avatar_url} alt={selectedClientForDetail.name} className="w-16 h-16 rounded-xl object-cover border border-indigo-500/50" />
+                    ) : (
+                      <div className="w-16 h-16 rounded-xl bg-slate-700 flex items-center justify-center text-indigo-400">
+                        <User className="w-8 h-8" />
+                      </div>
+                    )}
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-100">{selectedClientForDetail.name}</h2>
+                      <p className="text-xs text-indigo-400 font-medium">Müşteri Arşivi & Detay Kartı</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1">
+                      <span className="text-slate-400 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-indigo-400" /> Telefon</span>
+                      <p className="font-semibold text-slate-200">{selectedClientForDetail.phone || 'Belirtilmemiş'}</p>
+                    </div>
+                    <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1">
+                      <span className="text-slate-400 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-indigo-400" /> E-posta</span>
+                      <p className="font-semibold text-slate-200 truncate">{selectedClientForDetail.email || 'Belirtilmemiş'}</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1 text-xs">
+                    <span className="text-slate-400 flex items-center gap-1.5"><Home className="w-3.5 h-3.5 text-indigo-400" /> Adres</span>
+                    <p className="text-slate-200">{selectedClientForDetail.address || 'Kayıtlı adres bulunmuyor.'}</p>
+                  </div>
+
+                  <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1 text-xs">
+                    <span className="text-slate-400 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-indigo-400" /> Müşteri Notu</span>
+                    <p className="text-slate-300 italic">{selectedClientForDetail.notes || 'Herhangi bir müşteri notu eklenmemiş.'}</p>
+                  </div>
                 </div>
               ) : (
                 <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-12 text-center text-slate-400">Select a client to view details.</div>
@@ -594,33 +642,57 @@ export default function App() {
 
       {isClientModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-base font-bold text-slate-100 mb-4">Create New Client</h2>
             <form onSubmit={handleClientSubmit} className="space-y-3 text-xs">
-              <input type="text" name="name" required placeholder="Full Name" value={clientFormData.name} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              <input type="text" name="phone" placeholder="Phone" value={clientFormData.phone} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              <input type="email" name="email" placeholder="Email" value={clientFormData.email} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              <div className="flex gap-2 pt-2"><button type="button" onClick={() => setIsClientModalOpen(false)} className="w-1/2 py-2 bg-slate-700 rounded text-slate-200">Cancel</button><button type="submit" className="w-1/2 py-2 bg-emerald-600 rounded text-white">Save</button></div>
-            </form>
-          </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Müşteri Fotoğrafı (Avatar)</label>
+                <input type="file" accept="image/*" onChange={handleFileChange} className="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer bg-slate-900 border border-slate-700 rounded-lg p-1" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Ad Soyad / Firma *</label>
+                <input type="text" name="name" required placeholder="Ad Soyad veya Firma Adı" value={clientFormData.name} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Telefon</label>
+                <input type="text" name="phone" placeholder="+90 (555) 000 00 00" value={clientFormData.phone} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">E-posta</label>
+                <input type="email" name="email" placeholder="ornek@domain.com" value={clientFormData.email} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Adres</label>
+                <input type="text" name="address" placeholder="Açık adres bilgisi" value={clientFormData.address} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Müşteri Notu</label>
+                <textarea name="notes" placeholder="Müşteri hakkında özel notlar..." rows={3} value={clientFormData.notes} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100 resize-none" />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button type="button" onClick={() => setIsClientModalOpen(false)} className="w-1/2 py-2 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 transition">Cancel</button>
+                <button type="submit" disabled={uploadingAvatar} className="w-1/2 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-white transition">{uploadingAvatar ? 'Yükleniyor...' : 'Save'}</button>
+              </div>
+          </form>
         </div>
-      )}
+      </div>
+    )}
 
-      {isShootModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-base font-bold text-slate-100 mb-4">{editingShootId ? 'Edit Shoot' : 'New Shoot'}</h2>
-            <form onSubmit={handleShootSubmit} className="space-y-3 text-xs">
-              <select value={selectedClientId} onChange={handleClientSelectChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100"><option value="new">+ New Client</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-              <input type="text" name="client_name" required placeholder="Client Name" value={formData.client_name} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              <input type="date" name="date" required value={formData.date} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              <input type="number" name="price" placeholder="Price (₺)" value={formData.price} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              <input type="url" name="drive_link" placeholder="Drive / Gallery Link" value={formData.drive_link} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              <div className="flex gap-2 pt-2"><button type="button" onClick={() => setIsShootModalOpen(false)} className="w-1/2 py-2 bg-slate-700 rounded text-slate-200">Cancel</button><button type="submit" className="w-1/2 py-2 bg-indigo-600 rounded text-white">Save</button></div>
-            </form>
-          </div>
+    {isShootModalOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+          <h2 className="text-base font-bold text-slate-100 mb-4">{editingShootId ? 'Edit Shoot' : 'New Shoot'}</h2>
+          <form onSubmit={handleShootSubmit} className="space-y-3 text-xs">
+            <select value={selectedClientId} onChange={handleClientSelectChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100"><option value="new">+ New Client</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+            <input type="text" name="client_name" required placeholder="Client Name" value={formData.client_name} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+            <input type="date" name="date" required value={formData.date} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+            <input type="number" name="price" placeholder="Price (₺)" value={formData.price} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+            <input type="url" name="drive_link" placeholder="Drive / Gallery Link" value={formData.drive_link} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+            <div className="flex gap-2 pt-2"><button type="button" onClick={() => setIsShootModalOpen(false)} className="w-1/2 py-2 bg-slate-700 rounded text-slate-200">Cancel</button><button type="submit" className="w-1/2 py-2 bg-indigo-600 rounded text-white">Save</button></div>
+          </form>
         </div>
-      )}
-    </div>
-  );
+      </div>
+    )}
+  </div>
+);
 }
