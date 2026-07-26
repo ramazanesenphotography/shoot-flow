@@ -43,8 +43,6 @@ export default function App() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingShootId, setEditingShootId] = useState<string | null>(null);
-  
-  // Açık olan kartın ID'si
   const [expandedShootId, setExpandedShootId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
@@ -228,11 +226,11 @@ export default function App() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900/40 text-green-300 border border-green-700/50"><CheckCircle className="w-3 h-3 mr-1" /> Tamamlandı</span>;
+        return <span className="inline-flex items-center justify-center w-28 py-1 rounded-full text-xs font-medium bg-green-900/40 text-green-300 border border-green-700/50"><CheckCircle className="w-3 h-3 mr-1" /> Tamamlandı</span>;
       case 'cancelled':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-900/40 text-red-300 border border-red-700/50"><XCircle className="w-3 h-3 mr-1" /> İptal</span>;
+        return <span className="inline-flex items-center justify-center w-28 py-1 rounded-full text-xs font-medium bg-red-900/40 text-red-300 border border-red-700/50"><XCircle className="w-3 h-3 mr-1" /> İptal</span>;
       default:
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900/40 text-blue-300 border border-blue-700/50"><Clock className="w-3 h-3 mr-1" /> Planlandı</span>;
+        return <span className="inline-flex items-center justify-center w-28 py-1 rounded-full text-xs font-medium bg-blue-900/40 text-blue-300 border border-blue-700/50"><Clock className="w-3 h-3 mr-1" /> Planlandı</span>;
     }
   };
 
@@ -292,7 +290,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Compact Accordion List */}
+        {/* Compact List */}
         {loading ? (
           <div className="flex justify-center items-center py-20">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500"></div>
@@ -312,13 +310,13 @@ export default function App() {
                   key={shoot.id} 
                   className="bg-slate-800 border border-slate-700/80 rounded-xl overflow-hidden transition duration-150 shadow-sm hover:border-slate-600"
                 >
-                  {/* KAPALI / SADE GÖRÜNÜM (Aynen görseldeki To-Do tarzı) */}
+                  {/* KAPALI HALİ */}
                   <div 
                     onClick={() => toggleExpand(shoot.id)}
                     className="p-3.5 cursor-pointer flex items-center justify-between gap-3 bg-slate-800 hover:bg-slate-700/50 transition"
                   >
-                    {/* Sol Kısım: Müşteri Adı + Tür */}
-                    <div className="flex items-center space-x-3 min-w-0">
+                    {/* Sol: Müşteri Bilgisi */}
+                    <div className="flex items-center space-x-3 min-w-0 flex-1">
                       <div className="p-2 bg-slate-700/60 rounded-lg text-indigo-400 shrink-0">
                         <User className="w-4 h-4" />
                       </div>
@@ -332,16 +330,25 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Sağ Kısım: Tarih + Rozet + Açma Oku */}
-                    <div className="flex items-center space-x-3 shrink-0 text-xs">
-                      <div className="hidden sm:flex items-center gap-1.5 text-slate-300 bg-slate-900/60 px-2.5 py-1 rounded-md border border-slate-700/50">
-                        <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                    {/* Sağ: SABİT BÖLMELİ TARİH / SAAT / DURUM */}
+                    <div className="flex items-center space-x-2 shrink-0 text-xs">
+                      
+                      {/* Tarih Bölmesi (Sabit Genişlik) */}
+                      <div className="hidden sm:flex items-center justify-center w-32 py-1.5 px-2 bg-slate-900/80 rounded-lg border border-slate-700/60 text-slate-200 font-medium">
+                        <Calendar className="w-3.5 h-3.5 text-indigo-400 mr-1.5 shrink-0" />
                         <span>{shoot.date || 'Tarihsiz'}</span>
-                        {shoot.time && <span className="text-slate-400">• {shoot.time}</span>}
                       </div>
 
+                      {/* Saat Bölmesi (Sabit Genişlik - Boşsa --:-- yazar, düzen bozulmaz) */}
+                      <div className={`hidden md:flex items-center justify-center w-20 py-1.5 px-2 bg-slate-900/80 rounded-lg border border-slate-700/60 font-medium ${shoot.time ? 'text-slate-200' : 'text-slate-500'}`}>
+                        <Clock className={`w-3.5 h-3.5 mr-1 shrink-0 ${shoot.time ? 'text-indigo-400' : 'text-slate-600'}`} />
+                        <span>{shoot.time || '--:--'}</span>
+                      </div>
+
+                      {/* Durum Rozeti */}
                       <div>{getStatusBadge(shoot.status)}</div>
 
+                      {/* Ok Simgesi */}
                       <div className="text-slate-400 p-1">
                         {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                       </div>
@@ -351,11 +358,16 @@ export default function App() {
                   {/* AÇILAN DETAY ALANI */}
                   {isExpanded && (
                     <div className="p-4 bg-slate-900/90 border-t border-slate-700/60 space-y-3 text-xs">
-                      {/* Mobil Tarih Gösterimi */}
-                      <div className="flex sm:hidden items-center gap-2 text-slate-300 pb-2 border-b border-slate-800">
-                        <Calendar className="w-4 h-4 text-indigo-400" />
-                        <span className="font-medium">{shoot.date || 'Tarih Belirtilmedi'}</span>
-                        {shoot.time && <span>- {shoot.time}</span>}
+                      {/* Mobil ve Küçük Ekranlar İçin Tarih/Saat Detayı */}
+                      <div className="flex md:hidden items-center gap-3 text-slate-300 pb-2 border-b border-slate-800">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>{shoot.date || 'Tarih Belirtilmedi'}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-slate-400">
+                          <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>{shoot.time || 'Saat Belirtilmedi'}</span>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300">
@@ -389,7 +401,7 @@ export default function App() {
                         </div>
                       )}
 
-                      {/* Alt Butonlar */}
+                      {/* Alt İşlem Butonları */}
                       <div className="flex justify-between items-center pt-2 border-t border-slate-800">
                         <div className="flex space-x-2">
                           {shoot.status !== 'completed' && (
