@@ -26,8 +26,7 @@ import {
   Link as LinkIcon,
   LogOut,
   AlertCircle,
-  ShieldCheck,
-  MailCheck
+  ShieldCheck
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 
@@ -104,14 +103,18 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) checkApproval(session.user.id);
-      else setAuthLoading(false);
+      if (session) {
+        checkApproval(session.user.id);
+      } else {
+        setAuthLoading(false);
+      }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session) checkApproval(session.user.id);
-      else {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      setSession(currentSession);
+      if (currentSession) {
+        checkApproval(currentSession.user.id);
+      } else {
         setIsApproved(null);
         setAuthLoading(false);
       }
@@ -132,12 +135,11 @@ export default function App() {
       if (data) {
         setIsApproved(data.is_approved);
       } else {
-        // Eğer profil henüz oluşmadıysa otomatik oluşturmayı dene
         await supabase.from('user_profiles').insert([{ id: userId, email: session?.user?.email, is_approved: false }]);
         setIsApproved(false);
       }
     } catch (err) {
-      console.error('Approval check error:', err);
+      console.error('Approval error:', err);
       setIsApproved(false);
     } finally {
       setAuthLoading(false);
@@ -188,7 +190,7 @@ export default function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
-    setIsApproved(false);
+    setIsApproved(null);
   };
 
   const checkStatusAgain = () => {
@@ -197,7 +199,6 @@ export default function App() {
     }
   };
 
-  // Diğer form ve handler fonksiyonları (Önceki kodla aynı mantıkta korunuyor)
   const toggleExpand = (id: string) => { setExpandedShootId(expandedShootId === id ? null : id); };
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => { setFormData({ ...formData, [e.target.name]: e.target.value }); };
   const handleClientInputChange = (e: React.ChangeEvent<HTMLInputElement>) => { setClientFormData({ ...clientFormData, [e.target.name]: e.target.value }); };
@@ -238,6 +239,17 @@ export default function App() {
     setAvatarFile(null);
     setFormData({ client_name: '', client_phone: '', client_email: '', avatar_url: '', shoot_type: 'Portrait / Concept', location: '', date: '', time: '', price: '', notes: '', drive_link: '' });
     setEditingShootId(null);
+  };
+
+  const handleOpenAddShootModal = () => {
+    resetForm();
+    setIsShootModalOpen(true);
+  };
+
+  const handleOpenAddClientModal = () => {
+    setAvatarFile(null);
+    setClientFormData({ name: '', phone: '', email: '' });
+    setIsClientModalOpen(true);
   };
 
   const handleClientSubmit = async (e: React.FormEvent) => {
@@ -337,7 +349,6 @@ export default function App() {
     );
   }
 
-  // 1. GİRİŞ YAPMAMIŞSA GİRİŞ EKRANI
   if (!session) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -377,7 +388,6 @@ export default function App() {
     );
   }
 
-  // 2. GİRİŞ YAPMIŞ ANCAK ADMIN ONAYI BEKLİYORSA
   if (!isApproved) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -387,7 +397,7 @@ export default function App() {
           </div>
           <h1 className="text-xl font-bold text-white">Admin Approval Required</h1>
           <p className="text-xs text-slate-300 leading-relaxed">
-            Your email is verified, but your account is pending administrator approval. Once approved (or if you renewed your subscription), click below to refresh your status.
+            Your account is currently waiting for administrator approval (or subscription renewal). Once approved, click below to access your dashboard.
           </p>
 
           <div className="flex flex-col gap-2 pt-2">
@@ -403,7 +413,6 @@ export default function App() {
     );
   }
 
-  // 3. ONAYLI VE GİRİŞ YAPMIŞ KULLANICI İÇİN CRM PANELİ
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
       <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-10">
@@ -539,7 +548,6 @@ export default function App() {
         )}
       </main>
 
-      {/* MODALLAR (Öncekiyle aynı) */}
       {isClientModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl">
