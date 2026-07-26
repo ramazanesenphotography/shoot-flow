@@ -119,7 +119,7 @@ export default function App() {
         setSelectedClientForDetail(clientsData[0]);
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Veri yükleme hatası:', error);
     } finally {
       setLoading(false);
     }
@@ -327,7 +327,7 @@ export default function App() {
     }
   };
 
-  // Rapor Verileri
+  // Rapor & Finansal Matris Hesaplamaları
   const activeShoots = shoots.filter(s => s.status !== 'cancelled');
   const totalGross = activeShoots.reduce((acc, s) => acc + (Number(s.price) || 0), 0);
   const totalExpense = activeShoots.reduce((acc, s) => acc + (Number(s.expense) || 0), 0);
@@ -386,9 +386,9 @@ export default function App() {
           </div>
 
           <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-700">
-            <button onClick={() => setActiveTab('shoots')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'shoots' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Shoot Calendar</button>
-            <button onClick={() => setActiveTab('clients')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'clients' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Client Portfolio</button>
-            <button onClick={() => setActiveTab('reports')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'reports' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Reports</button>
+            <button onClick={() => setActiveTab('shoots')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'shoots' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>Shoot Calendar</button>
+            <button onClick={() => setActiveTab('clients')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'clients' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>Client Portfolio</button>
+            <button onClick={() => setActiveTab('reports')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'reports' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>Reports</button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -400,16 +400,17 @@ export default function App() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* SEKME 1: SHOOT CALENDAR */}
         {activeTab === 'shoots' && (
           <>
             <div className="flex flex-col md:flex-row gap-3 mb-6 justify-between items-center">
               <div className="relative w-full md:w-80">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input type="text" placeholder="Search shoot or client..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm" />
+                <input type="text" placeholder="Search shoot or client..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm outline-none" />
               </div>
               <div className="flex items-center space-x-2 w-full md:w-auto">
                 <Filter className="w-4 h-4 text-slate-400" />
-                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg p-2 w-full md:w-auto">
+                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg p-2 w-full md:w-auto outline-none">
                   <option value="all">All Statuses</option>
                   <option value="planned">Planned</option>
                   <option value="completed">Completed</option>
@@ -503,13 +504,13 @@ export default function App() {
           </>
         )}
 
-        {/* DETAYLI MÜŞTERİ PORTFÖYÜ EKRANI */}
+        {/* SEKME 2: CLIENT PORTFOLIO */}
         {activeTab === 'clients' && (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
               <div className="relative w-full sm:w-80">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input type="text" placeholder="Search client..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm" />
+                <input type="text" placeholder="Search client..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm outline-none" />
               </div>
               <button onClick={handleOpenAddClientModal} className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-medium transition text-xs shadow w-full sm:w-auto justify-center">
                 <UserPlus className="w-4 h-4" /><span>Yeni Müşteri Ekle</span>
@@ -624,6 +625,7 @@ export default function App() {
           </div>
         )}
 
+        {/* SEKME 3: REPORTS & FINANCIAL MATRIX */}
         {activeTab === 'reports' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -640,6 +642,7 @@ export default function App() {
               </button>
             </div>
 
+            {/* 4'lü Gelişmiş Özet Kartı (Brüt ve Masraf Kırılımlı) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-slate-800 border border-slate-700/80 p-5 rounded-2xl relative overflow-hidden shadow-sm space-y-2">
                 <div className="flex items-center justify-between text-slate-400 text-xs">
@@ -678,7 +681,8 @@ export default function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* Arama ve Durum Filtreleme Çubukları */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
@@ -705,6 +709,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* Tablo Matrisi */}
             <div className="bg-slate-800 border border-slate-700/80 rounded-2xl overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
@@ -733,7 +738,7 @@ export default function App() {
                         const ex = Number(shoot.expense) || 0;
                         const net = p - ex;
                         return (
-                          <tr key={shoot.id} className="hover:bg-slate-700/30 transition">
+                          <tr key={shoot.id} className="hover:bg-slate-700/35 transition">
                             <td className="py-3.5 px-4 font-semibold text-slate-100">{shoot.client_name}</td>
                             <td className="py-3.5 px-4 text-slate-300">{shoot.shoot_type}</td>
                             <td className="py-3.5 px-4 text-slate-400">{shoot.shoot_type}</td>
