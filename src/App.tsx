@@ -19,11 +19,6 @@ import {
   History,
   UserPlus,
   ExternalLink,
-  LogOut,
-  AlertCircle,
-  ShieldCheck,
-  RefreshCw,
-  Download,
   FileText,
   Home,
   Receipt
@@ -67,20 +62,6 @@ interface Shoot {
 }
 
 export default function App() {
-  const CURRENT_VERSION = "1.1.0";
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [updateMsg, setUpdateMsg] = useState("");
-
-  const [session, setSession] = useState<any>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [isApproved, setIsApproved] = useState<boolean | null>(true);
-  
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [authError, setAuthError] = useState('');
-  const [authMessage, setAuthMessage] = useState('');
-
   const [activeTab, setActiveTab] = useState<'shoots' | 'clients' | 'reports'>('shoots');
   const [shoots, setShoots] = useState<Shoot[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -118,19 +99,6 @@ export default function App() {
   });
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setAuthLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      setSession(currentSession);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
     loadData();
   }, []);
 
@@ -154,31 +122,6 @@ export default function App() {
       setLoading(false);
     }
   }
-
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError('');
-    setAuthMessage('');
-
-    try {
-      if (isRegistering) {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
-        setAuthMessage('Kayıt başarılı! Giriş yapabilirsiniz.');
-        setIsRegistering(false);
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      }
-    } catch (error: any) {
-      setAuthError(error.message || 'Giriş başarısız.');
-    }
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setSession(null);
-  };
 
   const toggleExpand = (id: string) => { setExpandedShootId(expandedShootId === id ? null : id); };
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => { setFormData({ ...formData, [e.target.name]: e.target.value }); };
@@ -255,7 +198,7 @@ export default function App() {
         if (uploadedUrl) avatarUrl = uploadedUrl;
       }
       const { data: newClient, error } = await supabase.from('clients').insert([{ 
-        user_id: session?.user?.id || 'local', 
+        user_id: 'local', 
         name: clientFormData.name, 
         phone: clientFormData.phone, 
         email: clientFormData.email, 
@@ -284,7 +227,7 @@ export default function App() {
       }
       let finalClientId = selectedClientId !== 'new' ? selectedClientId : undefined;
       if (selectedClientId === 'new' && formData.client_name) {
-        const { data: newClient } = await supabase.from('clients').insert([{ user_id: session?.user?.id || 'local', name: formData.client_name, phone: formData.client_phone, email: formData.client_email, avatar_url: avatarUrl }]).select();
+        const { data: newClient } = await supabase.from('clients').insert([{ user_id: 'local', name: formData.client_name, phone: formData.client_phone, email: formData.client_email, avatar_url: avatarUrl }]).select();
         if (newClient && newClient[0]) {
           finalClientId = newClient[0].id;
           setClients(prev => [...prev, newClient[0]]);
@@ -294,7 +237,7 @@ export default function App() {
       const totalExpenseCalculated = expenseItems.reduce((acc, item) => acc + (parseFloat(item.amount) || 0), 0);
 
       const shootPayload = { 
-        user_id: session?.user?.id || 'local', 
+        user_id: 'local', 
         client_id: finalClientId, 
         client_name: formData.client_name, 
         client_phone: formData.client_phone, 
@@ -411,75 +354,103 @@ export default function App() {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {activeTab !== 'reports' && (
           <div className="flex flex-col md:flex-row gap-3 mb-6 justify-between items-center">
-            <input type="text" placeholder="Ara..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full md:w-80 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200" />
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input type="text" placeholder={activeTab === 'shoots' ? "Search shoot or client..." : "Search client..."} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm" />
+            </div>
+
             {activeTab === 'shoots' ? (
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg p-2">
-                <option value="all">Tüm Durumlar</option>
-                <option value="planned">Planlanan</option>
-                <option value="completed">Tamamlanan</option>
-                <option value="cancelled">İptal</option>
-              </select>
+              <div className="flex items-center space-x-2 w-full md:w-auto">
+                <Filter className="w-4 h-4 text-slate-400" />
+                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg p-2 w-full md:w-auto">
+                  <option value="all">All Statuses</option>
+                  <option value="planned">Planned</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
             ) : (
-              <button onClick={handleOpenAddClientModal} className="bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-medium">Yeni Müşteri Ekle</button>
+              <button onClick={handleOpenAddClientModal} className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-lg font-medium transition text-xs shadow w-full md:w-auto justify-center">
+                <UserPlus className="w-4 h-4" /><span>Add New Client</span>
+              </button>
             )}
           </div>
         )}
 
         {activeTab === 'shoots' && (
           loading ? (
-            <div className="text-center py-12 text-slate-400">Yükleniyor...</div>
+            <div className="flex justify-center items-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500"></div></div>
           ) : filteredShoots.length === 0 ? (
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-12 text-center text-slate-400">Kayıt Bulunamadı</div>
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-12 text-center"><Camera className="w-10 h-10 text-slate-500 mx-auto mb-3" /><h3 className="text-base font-medium text-slate-300">No Shoots Found</h3></div>
           ) : (
             <div className="space-y-2">
               {filteredShoots.map((shoot) => {
                 const isExpanded = expandedShootId === shoot.id;
-                const p = Number(shoot.price) || 0;
-                const ex = Number(shoot.expense) || 0;
-                const net = p - ex;
+                const client = clients.find(c => c.id === shoot.client_id || c.name.toLowerCase() === shoot.client_name.toLowerCase());
+                const shootPrice = Number(shoot.price) || 0;
+                const shootExpense = Number(shoot.expense) || 0;
+                const shootNet = shootPrice - shootExpense;
 
                 return (
-                  <div key={shoot.id} className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-                    <div onClick={() => toggleExpand(shoot.id)} className="p-3.5 cursor-pointer flex justify-between items-center hover:bg-slate-700/50">
-                      <div>
-                        <h3 className="font-semibold text-sm text-slate-100">{shoot.client_name}</h3>
-                        <p className="text-xs text-slate-400">{shoot.shoot_type}</p>
+                  <div key={shoot.id} className="bg-slate-800 border border-slate-700/80 rounded-xl overflow-hidden shadow-sm">
+                    <div onClick={() => toggleExpand(shoot.id)} className="p-3.5 cursor-pointer flex items-center justify-between gap-3 hover:bg-slate-700/50 transition">
+                      <div className="flex items-center space-x-3 min-w-0 flex-1">
+                        {client?.avatar_url ? <img src={client.avatar_url} alt={shoot.client_name} className="w-9 h-9 rounded-lg object-cover shrink-0 border border-slate-600" /> : <div className="p-2 bg-slate-700/60 rounded-lg text-indigo-400 shrink-0"><User className="w-4 h-4" /></div>}
+                        <div className="truncate"><h3 className="font-semibold text-slate-100 text-sm truncate">{shoot.client_name}</h3><p className="text-xs text-slate-400 truncate">{shoot.shoot_type}</p></div>
                       </div>
-                      <div className="flex items-center gap-3 text-xs">
-                        <span>{shoot.date}</span>
-                        {getStatusBadge(shoot.status)}
-                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      <div className="flex items-center space-x-2 shrink-0 text-xs">
+                        <div className="hidden sm:flex items-center justify-center w-28 py-1 px-2 bg-slate-900/80 rounded-lg border border-slate-700/60 text-slate-200 font-medium"><Calendar className="w-3.5 h-3.5 text-indigo-400 mr-1 shrink-0" /><span>{shoot.date || 'No Date'}</span></div>
+                        <div>{getStatusBadge(shoot.status)}</div>
+                        <div className="text-slate-400 p-1">{isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</div>
                       </div>
                     </div>
                     {isExpanded && (
-                      <div className="p-4 bg-slate-900/90 border-t border-slate-700 space-y-3 text-xs">
-                        <div className="grid grid-cols-3 gap-2 text-slate-300">
-                          <div className="bg-slate-800 p-2 rounded">Brüt: ₺{p}</div>
-                          <div className="bg-slate-800 p-2 rounded text-red-400">Masraf: ₺{ex}</div>
-                          <div className="bg-slate-800 p-2 rounded text-green-400 font-bold">Net: ₺{net}</div>
+                      <div className="p-4 bg-slate-900/90 border-t border-slate-700/60 space-y-3 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-slate-300">
+                          {shoot.client_phone && <div className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-lg border border-slate-700/40"><Phone className="w-3.5 h-3.5 text-indigo-400" /><span>{shoot.client_phone}</span></div>}
+                          {shoot.client_email && <div className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-lg border border-slate-700/40"><Mail className="w-3.5 h-3.5 text-indigo-400" /><span className="truncate">{shoot.client_email}</span></div>}
+                          {shoot.location && <div className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-lg border border-slate-700/40 sm:col-span-3"><MapPin className="w-3.5 h-3.5 text-indigo-400" /><span>{shoot.location}</span></div>}
+                          
+                          <div className="flex items-center justify-between bg-slate-800/80 p-2 rounded-lg border border-slate-700/40">
+                            <span className="text-slate-400">Price (Brüt):</span>
+                            <span className="font-bold text-slate-200">₺{shootPrice}</span>
+                          </div>
+                          <div className="flex items-center justify-between bg-slate-800/80 p-2 rounded-lg border border-slate-700/40">
+                            <span className="text-slate-400">Expense (Masraf):</span>
+                            <span className="font-bold text-red-400">₺{shootExpense}</span>
+                          </div>
+                          <div className="flex items-center justify-between bg-slate-800/80 p-2 rounded-lg border border-slate-700/40">
+                            <span className="text-slate-400">Net Kâr:</span>
+                            <span className="font-bold text-green-400">₺{shootNet}</span>
+                          </div>
                         </div>
 
                         {shoot.expense_items && shoot.expense_items.length > 0 && (
-                          <div className="bg-slate-800/60 border border-slate-700/60 rounded-lg p-2 space-y-1">
-                            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Masraf Kalemleri</div>
-                            {shoot.expense_items.map((item, idx) => (
-                              <div key={idx} className="flex justify-between text-slate-300 bg-slate-900/60 px-2 py-1 rounded">
-                                <span>{item.title}</span>
-                                <span className="text-red-400 font-semibold">₺{item.amount}</span>
-                              </div>
-                            ))}
+                          <div className="bg-slate-800/60 border border-slate-700/60 rounded-lg p-2.5 space-y-1.5">
+                            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                              <Receipt className="w-3.5 h-3.5 text-red-400" /> Masraf Kalemleri
+                            </div>
+                            <div className="space-y-1">
+                              {shoot.expense_items.map((item, idx) => (
+                                <div key={idx} className="flex justify-between items-center text-slate-300 bg-slate-900/60 px-2 py-1 rounded">
+                                  <span>{item.title || 'İsimsiz Masraf'}</span>
+                                  <span className="font-semibold text-red-400">₺{item.amount || 0}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
 
-                        {shoot.notes && <div className="italic text-slate-400">"{shoot.notes}"</div>}
-                        <div className="flex justify-between pt-2 border-t border-slate-800">
-                          <div className="flex gap-2">
-                            {shoot.status !== 'completed' && <button onClick={(e) => handleStatusChange(shoot.id, 'completed', e)} className="px-2 py-1 bg-green-950 text-green-300 rounded">Tamamla</button>}
-                            {shoot.status !== 'cancelled' && <button onClick={(e) => handleStatusChange(shoot.id, 'cancelled', e)} className="px-2 py-1 bg-red-950 text-red-300 rounded">İptal Et</button>}
+                        {shoot.drive_link && <div><a href={shoot.drive_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-900/50 text-blue-200 border border-blue-700 rounded-lg"><ExternalLink className="w-3.5 h-3.5 text-blue-400" /><span>Open Gallery Link</span></a></div>}
+                        {shoot.notes && <div className="p-2.5 bg-slate-800/50 rounded-lg text-slate-300 italic">"{shoot.notes}"</div>}
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                          <div className="flex space-x-2">
+                            {shoot.status !== 'completed' && <button onClick={(e) => handleStatusChange(shoot.id, 'completed', e)} className="px-2.5 py-1 bg-green-950 text-green-300 border border-green-800 rounded flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Complete</button>}
+                            {shoot.status !== 'cancelled' && <button onClick={(e) => handleStatusChange(shoot.id, 'cancelled', e)} className="px-2.5 py-1 bg-red-950 text-red-300 border border-red-800 rounded flex items-center gap-1"><XCircle className="w-3 h-3" /> Cancel</button>}
                           </div>
-                          <div className="flex gap-2">
-                            <button onClick={(e) => handleOpenEditModal(shoot, e)} className="text-indigo-400"><Edit className="w-4 h-4" /></button>
-                            <button onClick={(e) => handleDelete(shoot.id, e)} className="text-red-400"><Trash2 className="w-4 h-4" /></button>
+                          <div className="flex space-x-1">
+                            <button onClick={(e) => handleOpenEditModal(shoot, e)} className="p-1.5 text-slate-400 hover:text-indigo-400"><Edit className="w-4 h-4" /></button>
+                            <button onClick={(e) => handleDelete(shoot.id, e)} className="p-1.5 text-slate-400 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
                           </div>
                         </div>
                       </div>
@@ -493,66 +464,235 @@ export default function App() {
 
         {activeTab === 'clients' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
+            <div className="md:col-span-1 space-y-2">
+              <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Clients ({filteredClients.length})</h2>
               {filteredClients.map(client => (
-                <div key={client.id} onClick={() => setSelectedClientForDetail(client)} className={`p-3 rounded-xl border cursor-pointer ${selectedClientForDetail?.id === client.id ? 'bg-indigo-950 border-indigo-500' : 'bg-slate-800 border-slate-700'}`}>
-                  <h3 className="font-semibold text-sm">{client.name}</h3>
-                  <p className="text-xs text-slate-400">{client.phone}</p>
+                <div key={client.id} onClick={() => setSelectedClientForDetail(client)} className={`p-3 rounded-xl border cursor-pointer transition flex justify-between items-center ${selectedClientForDetail?.id === client.id ? 'bg-indigo-950/60 border-indigo-500' : 'bg-slate-800 border-slate-700'}`}>
+                  <div className="flex items-center space-x-3">
+                    {client.avatar_url ? <img src={client.avatar_url} alt={client.name} className="w-10 h-10 rounded-lg object-cover" /> : <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center text-indigo-400"><User className="w-5 h-5" /></div>}
+                    <div><h3 className="font-semibold text-slate-100 text-sm">{client.name}</h3><p className="text-xs text-slate-400">{client.phone || 'No phone'}</p></div>
+                  </div>
                 </div>
               ))}
             </div>
             <div className="md:col-span-2">
               {selectedClientForDetail ? (
-                <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-4 text-xs">
-                  <h2 className="text-lg font-bold">{selectedClientForDetail.name}</h2>
-                  <p>Telefon: {selectedClientForDetail.phone}</p>
-                  <p>E-posta: {selectedClientForDetail.email}</p>
+                <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-5">
+                  <div className="flex items-center space-x-4 border-b border-slate-700 pb-4">
+                    {selectedClientForDetail.avatar_url ? (
+                      <img src={selectedClientForDetail.avatar_url} alt={selectedClientForDetail.name} className="w-16 h-16 rounded-xl object-cover border border-indigo-500/50" />
+                    ) : (
+                      <div className="w-16 h-16 rounded-xl bg-slate-700 flex items-center justify-center text-indigo-400">
+                        <User className="w-8 h-8" />
+                      </div>
+                    )}
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-100">{selectedClientForDetail.name}</h2>
+                    <p className="text-xs text-indigo-400 font-medium">Client Archive & Detail Card</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1">
+                      <span className="text-slate-400 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-indigo-400" /> Phone</span>
+                      <p className="font-semibold text-slate-200">{selectedClientForDetail.phone || 'Not specified'}</p>
+                    </div>
+                    <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1">
+                      <span className="text-slate-400 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-indigo-400" /> Email</span>
+                      <p className="font-semibold text-slate-200 truncate">{selectedClientForDetail.email || 'Not specified'}</p>
+                    </div>
+                  </div>
+
+                <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1 text-xs">
+                    <span className="text-slate-400 flex items-center gap-1.5"><Home className="w-3.5 h-3.5 text-indigo-400" /> Address</span>
+                    <p className="text-slate-200">{selectedClientForDetail.address || 'No address recorded.'}</p>
+                  </div>
+
+                <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1 text-xs">
+                    <span className="text-slate-400 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-indigo-400" /> Client Notes</span>
+                    <p className="text-slate-300 italic">{selectedClientForDetail.notes || 'No client notes added.'}</p>
+                  </div>
+
+                <div className="space-y-3 pt-3 border-t border-slate-700">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <History className="w-4 h-4 text-indigo-400" /> Past Shoots & Net Profit Archive
+                      </h3>
+                      {(() => {
+                        const clientShoots = shoots.filter(s => s.client_id === selectedClientForDetail.id || (s.client_name && s.client_name.toLowerCase() === selectedClientForDetail.name.toLowerCase()));
+                        const totalGross = clientShoots.reduce((acc, s) => acc + (Number(s.price) || 0), 0);
+                        const totalExpense = clientShoots.reduce((acc, s) => acc + (Number(s.expense) || 0), 0);
+                        const totalNet = totalGross - totalExpense;
+                        return (
+                          <div className="text-xs font-bold text-green-400 bg-green-950/60 border border-green-800/60 px-2.5 py-1 rounded-lg">
+                            Net Kâr: ₺{totalNet.toLocaleString()} <span className="text-[10px] text-slate-400 font-normal">(Brüt: ₺{totalGross.toLocaleString()})</span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {shoots.filter(s => s.client_id === selectedClientForDetail.id || (s.client_name && s.client_name.toLowerCase() === selectedClientForDetail.name.toLowerCase())).length === 0 ? (
+                        <p className="text-xs text-slate-500 italic bg-slate-900/40 p-3 rounded-lg text-center">No past shoot records found for this client.</p>
+                      ) : (
+                        shoots
+                          .filter(s => s.client_id === selectedClientForDetail.id || (s.client_name && s.client_name.toLowerCase() === selectedClientForDetail.name.toLowerCase()))
+                          .map(shoot => {
+                            const p = Number(shoot.price) || 0;
+                            const ex = Number(shoot.expense) || 0;
+                            const net = p - ex;
+                            return (
+                              <div key={shoot.id} className="bg-slate-900/80 border border-slate-700/60 rounded-lg p-3 flex items-center justify-between text-xs gap-2">
+                                <div className="space-y-0.5">
+                                  <div className="font-semibold text-slate-200">{shoot.shoot_type}</div>
+                                  <div className="text-slate-400 flex items-center gap-2">
+                                    <span><Calendar className="w-3 h-3 inline mr-1 text-indigo-400" />{shoot.date || 'No date'}</span>
+                                    <span><MapPin className="w-3 h-3 inline mr-1 text-indigo-400" />{shoot.location || 'No location'}</span>
+                                  </div>
+                                </div>
+                                <div className="text-right space-y-0.5 shrink-0">
+                                  <div className="font-bold text-green-400">Net: ₺{net.toLocaleString()}</div>
+                                  <div className="text-[10px] text-slate-400">Brüt: ₺{p} | Masraf: <span className="text-red-400">₺{ex}</span></div>
+                                  <div>{getStatusBadge(shoot.status)}</div>
+                                </div>
+                              </div>
+                            );
+                          })
+                      )}
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <div className="text-slate-400 text-center p-12">Müşteri seçin</div>
+                <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-12 text-center text-slate-400">Select a client to view details.</div>
               )}
             </div>
           </div>
         )}
 
-        {activeTab === 'reports' && <ReportsPage shoots={shoots} />}
+        {activeTab === 'reports' && (
+          <ReportsPage shoots={shoots} />
+        )}
       </main>
 
-      {isShootModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-lg w-full p-6 space-y-3 text-xs max-h-[90vh] overflow-y-auto">
-            <h2 className="font-bold text-sm">{editingShootId ? 'Çekimi Düzenle' : 'Yeni Çekim Ekle'}</h2>
-            <form onSubmit={handleShootSubmit} className="space-y-3">
-              <select value={selectedClientId} onChange={handleClientSelectChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100">
-                <option value="new">+ Yeni Müşteri</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <input type="text" name="client_name" required placeholder="Müşteri Adı" value={formData.client_name} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              <input type="text" name="shoot_type" placeholder="Çekim Türü" value={formData.shoot_type} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              <div className="grid grid-cols-2 gap-2">
-                <input type="date" name="date" required value={formData.date} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-                <input type="time" name="time" value={formData.time} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+      {isClientModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-base font-bold text-slate-100 mb-4">Create New Client</h2>
+            <form onSubmit={handleClientSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 mb-1">Client Avatar / Photo</label>
+                <input type="file" accept="image/*" onChange={handleFileChange} className="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer bg-slate-900 border border-slate-700 rounded-lg p-1" />
               </div>
-              <input type="text" name="location" placeholder="Lokasyon" value={formData.location} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              <input type="number" name="price" placeholder="Brüt Tutar (₺)" value={formData.price} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+              <div>
+                <label className="block text-slate-400 mb-1">Full Name / Company *</label>
+                <input type="text" name="name" required placeholder="Full Name or Company Name" value={clientFormData.name} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Phone</label>
+                <input type="text" name="phone" placeholder="+90 (555) 000 00 00" value={clientFormData.phone} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Email</label>
+                <input type="email" name="email" placeholder="example@domain.com" value={clientFormData.email} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Address</label>
+                <input type="text" name="address" placeholder="Full address details" value={clientFormData.address} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Client Notes</label>
+                <textarea name="notes" placeholder="Special notes about the client..." rows={3} value={clientFormData.notes} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100 resize-none" />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button type="button" onClick={() => setIsClientModalOpen(false)} className="w-1/2 py-2 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 transition">Cancel</button>
+                <button type="submit" disabled={uploadingAvatar} className="w-1/2 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-white transition">{uploadingAvatar ? 'Uploading...' : 'Save'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-              <div className="bg-slate-900/60 border border-slate-700 p-3 rounded-lg space-y-2">
+      {isShootModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-base font-bold text-slate-100 mb-4">{editingShootId ? 'Edit Shoot' : 'New Shoot'}</h2>
+            <form onSubmit={handleShootSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 mb-1">Select Client</label>
+                <select value={selectedClientId} onChange={handleClientSelectChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100">
+                  <option value="new">+ New Client</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Client Name *</label>
+                <input type="text" name="client_name" required placeholder="Client Name" value={formData.client_name} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Shoot Type</label>
+                <input type="text" name="shoot_type" placeholder="e.g. Portrait / Concept / Sport" value={formData.shoot_type} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-400 mb-1">Date *</label>
+                  <input type="date" name="date" required value={formData.date} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+                </div>
+                <div>
+                  <label className="block text-slate-400 mb-1">Time</label>
+                  <input type="time" name="time" value={formData.time} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Location</label>
+                <input type="text" name="location" placeholder="Studio or Venue location" value={formData.location} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Price / Gross (₺)</label>
+                <input type="number" name="price" placeholder="0.00" value={formData.price} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-700/80 p-3 rounded-lg space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="font-semibold text-slate-300 flex items-center gap-1.5">
-                    <Receipt className="w-4 h-4 text-red-400" /> Masraf Kalemleri (Yol, Yemek vb.)
+                    <Receipt className="w-4 h-4 text-red-400" /> Masraf Kalemleri (İsteğe Bağlı)
                   </span>
-                  <button type="button" onClick={addExpenseItem} className="px-2.5 py-1 bg-indigo-600 text-white rounded text-[11px] font-medium">
-                    + Kalem Ekle
+                  <button
+                    type="button"
+                    onClick={addExpenseItem}
+                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[11px] font-medium transition flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" /> Kalem Ekle
                   </button>
                 </div>
 
-                {expenseItems.length > 0 && (
+                {expenseItems.length === 0 ? (
+                  <p className="text-[11px] text-slate-500 italic py-1">Henüz masraf kalemi eklenmedi. (Yol, yemek, köprü vb. için ekleyebilirsin)</p>
+                ) : (
                   <div className="space-y-2 pt-1">
                     {expenseItems.map((item) => (
                       <div key={item.id} className="flex items-center gap-2">
-                        <input type="text" placeholder="Açıklama (Yol, Yemek)" value={item.title} onChange={(e) => updateExpenseItem(item.id, 'title', e.target.value)} className="flex-1 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-xs text-slate-100" />
-                        <input type="number" placeholder="Tutar (₺)" value={item.amount} onChange={(e) => updateExpenseItem(item.id, 'amount', e.target.value)} className="w-20 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-xs text-slate-100" />
-                        <button type="button" onClick={() => removeExpenseItem(item.id)} className="p-1 text-red-400 bg-red-950 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                        <input
+                          type="text"
+                          placeholder="Açıklama (Örn: Yol, Yemek)"
+                          value={item.title}
+                          onChange={(e) => updateExpenseItem(item.id, 'title', e.target.value)}
+                          className="flex-1 px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded text-xs text-slate-100"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Tutar (₺)"
+                          value={item.amount}
+                          onChange={(e) => updateExpenseItem(item.id, 'amount', e.target.value)}
+                          className="w-24 px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded text-xs text-slate-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeExpenseItem(item.id)}
+                          className="p-1.5 bg-red-950/60 hover:bg-red-900 text-red-400 rounded border border-red-800/40 transition"
+                          title="Kalemi Sil"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     ))}
                     <div className="text-right text-[11px] font-bold text-red-400 pt-1 border-t border-slate-800">
@@ -562,27 +702,17 @@ export default function App() {
                 )}
               </div>
 
-              <textarea name="notes" placeholder="Notlar..." rows={2} value={formData.notes} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100 resize-none" />
-              <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setIsShootModalOpen(false)} className="w-1/2 py-2 bg-slate-700 rounded text-slate-200">İptal</button>
-                <button type="submit" className="w-1/2 py-2 bg-indigo-600 rounded text-white">Kaydet</button>
+              <div>
+                <label className="block text-slate-400 mb-1">Drive / Gallery Link</label>
+                <input type="url" name="drive_link" placeholder="https://..." value={formData.drive_link} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
               </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {isClientModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-sm w-full p-6 space-y-3 text-xs">
-            <h2 className="font-bold text-sm">Yeni Müşteri Ekle</h2>
-            <form onSubmit={handleClientSubmit} className="space-y-3">
-              <input type="text" name="name" required placeholder="Adı / Şirket" value={clientFormData.name} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              <input type="text" name="phone" placeholder="Telefon" value={clientFormData.phone} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
-              <input type="email" name="email" placeholder="E-posta" value={clientFormData.email} onChange={handleClientInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
+              <div>
+                <label className="block text-slate-400 mb-1">Shoot Notes</label>
+                <textarea name="notes" placeholder="Special requests or notes for this shoot..." rows={2} value={formData.notes} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100 resize-none" />
+              </div>
               <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setIsClientModalOpen(false)} className="w-1/2 py-2 bg-slate-700 rounded text-slate-200">İptal</button>
-                <button type="submit" className="w-1/2 py-2 bg-emerald-600 rounded text-white">Kaydet</button>
+                <button type="button" onClick={() => setIsShootModalOpen(false)} className="w-1/2 py-2 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 transition">Cancel</button>
+                <button type="submit" className="w-1/2 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-white transition">Save</button>
               </div>
             </form>
           </div>
