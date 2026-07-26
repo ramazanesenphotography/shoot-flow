@@ -18,12 +18,21 @@ import {
   Edit,
   RotateCcw,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  UserPlus
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 
+interface Client {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+}
+
 interface Shoot {
   id: string;
+  client_id?: string;
   client_name: string;
   client_phone: string;
   client_email: string;
@@ -38,12 +47,16 @@ interface Shoot {
 
 export default function App() {
   const [shoots, setShoots] = useState<Shoot[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingShootId, setEditingShootId] = useState<string | null>(null);
   const [expandedShootId, setExpandedShootId] = useState<string | null>(null);
+
+  // Müşteri seçimi / Yeni müşteri modu
+  const [selectedClientId, setSelectedClientId] = useState<string>('new');
 
   const [formData, setFormData] = useState({
     client_name: '',
@@ -58,21 +71,29 @@ export default function App() {
   });
 
   useEffect(() => {
-    fetchShoots();
+    loadData();
   }, []);
 
-  async function fetchShoots() {
+  async function loadData() {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      // Çekimleri çek
+      const { data: shootsData } = await supabase
         .from('shoots')
         .select('*')
         .order('date', { ascending: true });
 
-      if (error) throw error;
-      setShoots(data || []);
+      // Müşterileri çek
+      const { data: clientsData } = await supabase
+        .from('clients')
+        .select('*')
+        .order('name', { ascending: true });
+
+      setShoots(shootsData || []);
+      setClients(clientsData || []);
     } catch (error) {
-      console.error('Çekimler yüklenirken hata oluştu:', error);
+      console.error('Veriler yüklenirken hata oluştu:', error);
     } finally {
       setLoading(false);
     }
@@ -89,7 +110,27 @@ export default function App() {
     });
   };
 
+  const handleClientSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setSelectedClientId(val);
+
+    if (val === 'new') {
+      setFormData(prev => ({ ...prev, client_name: '', client_phone: '', client_email: '' }));
+    } else {
+      const selected = clients.find(c => c.id === val);
+      if (selected) {
+        setFormData(prev => ({
+          ...prev,
+          client_name: selected.name,
+          client_phone: selected.phone || '',
+          client_email: selected.email || ''
+        }));
+      }
+    }
+  };
+
   const resetForm = () => {
+    setSelectedClientId('new');
     setFormData({
       client_name: '',
       client_phone: '',
@@ -112,6 +153,7 @@ export default function App() {
   const handleOpenEditModal = (shoot: Shoot, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingShootId(shoot.id);
+    setSelectedClientId(shoot.client_id || 'new');
     setFormData({
       client_name: shoot.client_name || '',
       client_phone: shoot.client_phone || '',
@@ -129,44 +171,54 @@ export default function App() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      if (editingShootId) {
-        const updatedShoot = {
-          ...formData,
-          price: parseFloat(formData.price) || 0
-        };
+      let finalClientId = selectedClientId !== 'new' ? selectedClientId : undefined;
 
+      // Eğer yeni müşteri girilmişse önce clients tablosuna kaydet
+      if (selectedClientId === 'new' && formData.client_name) {
+        const { data: newClient } = await supabase
+          .from('clients')
+          .insert([{
+            name: formData.client_name,
+            phone: formData.client_phone,
+            email: formData.client_email
+          }])
+          .select();
+
+        if (newClient && newClient[0]) {
+          finalClientId = newClient[0].id;
+          setClients(prev => [...prev, newClient[0]]);
+        }
+      }
+
+      const shootPayload = {
+        ...formData,
+        client_id: finalClientId,
+        price: parseFloat(formData.price) || 0
+      };
+
+      if (editingShootId) {
         const { error } = await supabase
           .from('shoots')
-          .update(updatedShoot)
+          .update(shootPayload)
           .eq('id', editingShootId);
 
         if (error) throw error;
-
-        setShoots(shoots.map(s => s.id === editingShootId ? { ...s, ...updatedShoot } : s));
+        setShoots(shoots.map(s => s.id === editingShootId ? { ...s, ...shootPayload } : s));
       } else {
-        const newShoot = {
-          ...formData,
-          price: parseFloat(formData.price) || 0,
-          status: 'planned' as const
-        };
-
         const { data, error } = await supabase
           .from('shoots')
-          .insert([newShoot])
+          .insert([{ ...shootPayload, status: 'planned' }])
           .select();
 
         if (error) throw error;
-
-        if (data) {
-          setShoots([...shoots, data[0]]);
-        }
+        if (data) setShoots([...shoots, data[0]]);
       }
 
       setIsModalOpen(false);
       resetForm();
     } catch (error) {
-      console.error('İşlem sırasında hata oluştu:', error);
-      alert('İşlem gerçekleştirilemedi. Lütfen internet bağlantınızı kontrol edin.');
+      console.error('Kayıt hatası:', error);
+      alert('İşlem gerçekleştirilemedi.');
     }
   };
 
@@ -179,12 +231,9 @@ export default function App() {
         .eq('id', id);
 
       if (error) throw error;
-
-      setShoots(shoots.map(shoot => 
-        shoot.id === id ? { ...shoot, status: newStatus } : shoot
-      ));
+      setShoots(shoots.map(shoot => shoot.id === id ? { ...shoot, status: newStatus } : shoot));
     } catch (error) {
-      console.error('Durum güncellenirken hata oluştu:', error);
+      console.error('Durum güncelleme hatası:', error);
     }
   };
 
@@ -193,16 +242,11 @@ export default function App() {
     if (!confirm('Bu çekim kaydını silmek istediğinize emin misiniz?')) return;
     
     try {
-      const { error } = await supabase
-        .from('shoots')
-        .delete()
-        .eq('id', id);
-
+      const { error } = await supabase.from('shoots').delete().eq('id', id);
       if (error) throw error;
-
       setShoots(shoots.filter(shoot => shoot.id !== id));
     } catch (error) {
-      console.error('Silme işleminde hata oluştu:', error);
+      console.error('Silme hatası:', error);
     }
   };
 
@@ -212,9 +256,7 @@ export default function App() {
         (shoot.client_name && shoot.client_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (shoot.location && shoot.location.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (shoot.shoot_type && shoot.shoot_type.toLowerCase().includes(searchTerm.toLowerCase()));
-      
       const matchesStatus = filterStatus === 'all' || shoot.status === filterStatus;
-
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
@@ -247,7 +289,7 @@ export default function App() {
               <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
                 ShootFlow
               </h1>
-              <p className="text-xs text-slate-400">Çekim Takip Paneli</p>
+              <p className="text-xs text-slate-400">Çekim & Müşteri Takip Paneli</p>
             </div>
           </div>
           <button
@@ -315,7 +357,6 @@ export default function App() {
                     onClick={() => toggleExpand(shoot.id)}
                     className="p-3.5 cursor-pointer flex items-center justify-between gap-3 bg-slate-800 hover:bg-slate-700/50 transition"
                   >
-                    {/* Sol: Müşteri Bilgisi */}
                     <div className="flex items-center space-x-3 min-w-0 flex-1">
                       <div className="p-2 bg-slate-700/60 rounded-lg text-indigo-400 shrink-0">
                         <User className="w-4 h-4" />
@@ -330,25 +371,19 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Sağ: SABİT BÖLMELİ TARİH / SAAT / DURUM */}
                     <div className="flex items-center space-x-2 shrink-0 text-xs">
-                      
-                      {/* Tarih Bölmesi (Sabit w-28) */}
                       <div className="hidden sm:flex items-center justify-center w-28 py-1 px-2 bg-slate-900/80 rounded-lg border border-slate-700/60 text-slate-200 font-medium">
                         <Calendar className="w-3.5 h-3.5 text-indigo-400 mr-1 shrink-0" />
                         <span>{shoot.date || 'Tarihsiz'}</span>
                       </div>
 
-                      {/* Saat Bölmesi (Sabit w-16 - Boşsa --:-- yazar) */}
                       <div className={`hidden sm:flex items-center justify-center w-16 py-1 px-2 bg-slate-900/80 rounded-lg border border-slate-700/60 font-medium ${shoot.time ? 'text-slate-200' : 'text-slate-500'}`}>
                         <Clock className={`w-3.5 h-3.5 mr-1 shrink-0 ${shoot.time ? 'text-indigo-400' : 'text-slate-600'}`} />
                         <span>{shoot.time || '--:--'}</span>
                       </div>
 
-                      {/* Durum Rozeti */}
                       <div>{getStatusBadge(shoot.status)}</div>
 
-                      {/* Ok Simgesi */}
                       <div className="text-slate-400 p-1">
                         {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                       </div>
@@ -358,7 +393,6 @@ export default function App() {
                   {/* AÇILAN DETAY ALANI */}
                   {isExpanded && (
                     <div className="p-4 bg-slate-900/90 border-t border-slate-700/60 space-y-3 text-xs">
-                      {/* Mobil Ekran Tarih/Saat Gösterimi */}
                       <div className="flex sm:hidden items-center gap-3 text-slate-300 pb-2 border-b border-slate-800">
                         <div className="flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5 text-indigo-400" />
@@ -401,7 +435,6 @@ export default function App() {
                         </div>
                       )}
 
-                      {/* Alt İşlem Butonları */}
                       <div className="flex justify-between items-center pt-2 border-t border-slate-800">
                         <div className="flex space-x-2">
                           {shoot.status !== 'completed' && (
@@ -476,6 +509,24 @@ export default function App() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+              
+              {/* MÜŞTERİ SEÇİM ALANI */}
+              <div>
+                <label className="block font-medium text-slate-300 mb-1">Müşteri Profili Seçin</label>
+                <select
+                  value={selectedClientId}
+                  onChange={handleClientSelectChange}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:ring-2 focus:ring-indigo-500 font-medium"
+                >
+                  <option value="new">+ Yeni Müşteri Oluştur</option>
+                  {clients.map(c => (
+                    <option key={c.id} value={c.id}>
+                      👤 {c.name} {c.phone ? `(${c.phone})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block font-medium text-slate-300 mb-1">Müşteri Adı Soyadı *</label>
                 <input
@@ -484,6 +535,7 @@ export default function App() {
                   required
                   value={formData.client_name}
                   onChange={handleInputChange}
+                  placeholder="Örn: Zehra Güneş"
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
