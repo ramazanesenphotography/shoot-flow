@@ -15,7 +15,9 @@ import {
   Search,
   Filter,
   DollarSign,
-  Briefcase
+  Briefcase,
+  Edit,
+  RotateCcw
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 
@@ -39,6 +41,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingShootId, setEditingShootId] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -81,41 +84,85 @@ export default function App() {
     });
   };
 
+  const resetForm = () => {
+    setFormData({
+      client_name: '',
+      client_phone: '',
+      client_email: '',
+      shoot_type: 'Portre / Konsept',
+      location: '',
+      date: '',
+      time: '',
+      price: '',
+      notes: ''
+    });
+    setEditingShootId(null);
+  };
+
+  const handleOpenAddModal = () => {
+    resetForm();
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (shoot: Shoot) => {
+    setEditingShootId(shoot.id);
+    setFormData({
+      client_name: shoot.client_name || '',
+      client_phone: shoot.client_phone || '',
+      client_email: shoot.client_email || '',
+      shoot_type: shoot.shoot_type || 'Portre / Konsept',
+      location: shoot.location || '',
+      date: shoot.date || '',
+      time: shoot.time || '',
+      price: shoot.price ? shoot.price.toString() : '',
+      notes: shoot.notes || ''
+    });
+    setIsModalOpen(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const newShoot = {
-        ...formData,
-        price: parseFloat(formData.price) || 0,
-        status: 'planned' as const
-      };
+      if (editingShootId) {
+        // GÜNCELLEME İŞLEMİ
+        const updatedShoot = {
+          ...formData,
+          price: parseFloat(formData.price) || 0
+        };
 
-      const { data, error } = await supabase
-        .from('shoots')
-        .insert([newShoot])
-        .select();
+        const { error } = await supabase
+          .from('shoots')
+          .update(updatedShoot)
+          .eq('id', editingShootId);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      if (data) {
-        setShoots([...shoots, data[0]]);
+        setShoots(shoots.map(s => s.id === editingShootId ? { ...s, ...updatedShoot } : s));
+      } else {
+        // YENİ EKLEME İŞLEMİ
+        const newShoot = {
+          ...formData,
+          price: parseFloat(formData.price) || 0,
+          status: 'planned' as const
+        };
+
+        const { data, error } = await supabase
+          .from('shoots')
+          .insert([newShoot])
+          .select();
+
+        if (error) throw error;
+
+        if (data) {
+          setShoots([...shoots, data[0]]);
+        }
       }
-      
+
       setIsModalOpen(false);
-      setFormData({
-        client_name: '',
-        client_phone: '',
-        client_email: '',
-        shoot_type: 'Portre / Konsept',
-        location: '',
-        date: '',
-        time: '',
-        price: '',
-        notes: ''
-      });
+      resetForm();
     } catch (error) {
-      console.error('Kayıt eklenirken hata oluştu:', error);
-      alert('Kayıt eklenirken bir hata oluştu. Lütfen Supabase veritabanı bağlantınızı kontrol edin.');
+      console.error('İşlem sırasında hata oluştu:', error);
+      alert('İşlem gerçekleştirilemedi. Lütfen internet bağlantınızı kontrol edin.');
     }
   };
 
@@ -155,9 +202,9 @@ export default function App() {
 
   const filteredShoots = shoots.filter(shoot => {
     const matchesSearch = 
-      shoot.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      shoot.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      shoot.shoot_type.toLowerCase().includes(searchTerm.toLowerCase());
+      (shoot.client_name && shoot.client_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (shoot.location && shoot.location.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (shoot.shoot_type && shoot.shoot_type.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesStatus = filterStatus === 'all' || shoot.status === filterStatus;
 
@@ -167,11 +214,11 @@ export default function App() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" /> Tamamlandı</span>;
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900/40 text-green-300 border border-green-700/50"><CheckCircle className="w-3 h-3 mr-1" /> Tamamlandı</span>;
       case 'cancelled':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"><XCircle className="w-3 h-3 mr-1" /> İptal Edildi</span>;
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-900/40 text-red-300 border border-red-700/50"><XCircle className="w-3 h-3 mr-1" /> İptal Edildi</span>;
       default:
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"><Clock className="w-3 h-3 mr-1" /> Planlandı</span>;
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900/40 text-blue-300 border border-blue-700/50"><Clock className="w-3 h-3 mr-1" /> Planlandı</span>;
     }
   };
 
@@ -192,8 +239,8 @@ export default function App() {
             </div>
           </div>
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-medium transition duration-200 shadow-lg shadow-indigo-600/30"
+            onClick={handleOpenAddModal}
+            className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-medium transition duration-200 shadow-lg shadow-indigo-600/30 text-sm sm:text-base"
           >
             <Plus className="w-4 h-4" />
             <span>Yeni Çekim Ekle</span>
@@ -212,7 +259,7 @@ export default function App() {
               placeholder="Müşteri, mekan veya çekim türü ara..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
             />
           </div>
 
@@ -221,7 +268,7 @@ export default function App() {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5"
+              className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 w-full md:w-auto"
             >
               <option value="all">Tüm Durumlar</option>
               <option value="planned">Planlananlar</option>
@@ -287,7 +334,7 @@ export default function App() {
                       <span className="flex items-center gap-1.5 text-slate-400">
                         <Calendar className="w-3.5 h-3.5 text-indigo-400" /> Tarih:
                       </span>
-                      <span className="font-semibold text-slate-200">{shoot.date}</span>
+                      <span className="font-semibold text-slate-200">{shoot.date || 'Belirtilmedi'}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1.5 text-slate-400">
@@ -319,28 +366,57 @@ export default function App() {
                 {/* Actions */}
                 <div className="flex justify-between items-center pt-3 border-t border-slate-700/60 mt-auto">
                   <div className="flex space-x-1">
+                    {/* Durum Değiştirme ve Geri Alma Butonları */}
+                    {shoot.status !== 'completed' && (
+                      <button
+                        onClick={() => handleStatusChange(shoot.id, 'completed')}
+                        title="Tamamlandı Olarak İşaretle"
+                        className="p-1.5 hover:bg-green-500/20 text-slate-400 hover:text-green-400 rounded transition"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    {shoot.status !== 'cancelled' && (
+                      <button
+                        onClick={() => handleStatusChange(shoot.id, 'cancelled')}
+                        title="İptal Edildi Olarak İşaretle"
+                        className="p-1.5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded transition"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    {(shoot.status === 'completed' || shoot.status === 'cancelled') && (
+                      <button
+                        onClick={() => handleStatusChange(shoot.id, 'planned')}
+                        title="Tekrar Planlandı Yap (Geri Al)"
+                        className="p-1.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 rounded transition"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex space-x-1">
+                    {/* DÜZENLEME BUTONU */}
                     <button
-                      onClick={() => handleStatusChange(shoot.id, 'completed')}
-                      title="Tamamlandı Olarak İşaretle"
-                      className="p-1.5 hover:bg-green-500/20 text-slate-400 hover:text-green-400 rounded transition"
+                      onClick={() => handleOpenEditModal(shoot)}
+                      title="Çekim Bilgilerini Düzenle"
+                      className="p-1.5 hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 rounded transition"
                     >
-                      <CheckCircle className="w-4 h-4" />
+                      <Edit className="w-4 h-4" />
                     </button>
+
+                    {/* SİLME BUTONU */}
                     <button
-                      onClick={() => handleStatusChange(shoot.id, 'cancelled')}
-                      title="İptal Edildi Olarak İşaretle"
-                      className="p-1.5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded transition"
+                      onClick={() => handleDelete(shoot.id)}
+                      title="Kayıdı Sil"
+                      className="p-1.5 hover:bg-slate-700 text-slate-400 hover:text-red-400 rounded transition"
                     >
-                      <XCircle className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                  <button
-                    onClick={() => handleDelete(shoot.id)}
-                    title="Kayıdı Sil"
-                    className="p-1.5 hover:bg-slate-700 text-slate-400 hover:text-red-400 rounded transition"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </div>
               </div>
             ))}
@@ -348,17 +424,17 @@ export default function App() {
         )}
       </main>
 
-      {/* Modal - New Shoot Form */}
+      {/* Modal - New / Edit Shoot Form */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-5">
               <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
                 <Camera className="w-5 h-5 text-indigo-400" />
-                Yeni Çekim Ekle
+                {editingShootId ? 'Çekim Bilgilerini Düzenle' : 'Yeni Çekim Ekle'}
               </h2>
               <button 
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => { setIsModalOpen(false); resetForm(); }}
                 className="text-slate-400 hover:text-white"
               >
                 ✕
@@ -480,7 +556,7 @@ export default function App() {
               <div className="flex space-x-3 pt-3">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => { setIsModalOpen(false); resetForm(); }}
                   className="w-1/2 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium rounded-lg transition"
                 >
                   İptal
@@ -489,7 +565,7 @@ export default function App() {
                   type="submit"
                   className="w-1/2 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition shadow-md shadow-indigo-600/30"
                 >
-                  Kaydet
+                  {editingShootId ? 'Güncelle' : 'Kaydet'}
                 </button>
               </div>
             </form>
