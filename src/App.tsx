@@ -20,11 +20,6 @@ import {
   History,
   UserPlus,
   ExternalLink,
-  LogOut,
-  AlertCircle,
-  ShieldCheck,
-  RefreshCw,
-  Download,
   FileText,
   Home,
   Receipt
@@ -68,20 +63,6 @@ interface Shoot {
 }
 
 export default function App() {
-  const CURRENT_VERSION = "1.1.0";
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [updateMsg, setUpdateMsg] = useState("");
-
-  const [session, setSession] = useState<any>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [isApproved, setIsApproved] = useState<boolean | null>(null);
-  
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [authError, setAuthError] = useState('');
-  const [authMessage, setAuthMessage] = useState('');
-
   const [activeTab, setActiveTab] = useState<'shoots' | 'clients' | 'reports'>('shoots');
   const [shoots, setShoots] = useState<Shoot[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -102,7 +83,6 @@ export default function App() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  // Dinamik Masraf Kalemleri State'i
   const [expenseItems, setExpenseItems] = useState<ExpenseItem[]>([]);
 
   const [formData, setFormData] = useState({
@@ -120,74 +100,17 @@ export default function App() {
   });
 
   useEffect(() => {
-    fetch('/version.json')
-      .then(res => res.json())
-      .then(data => {
-        if (data.version && data.version !== CURRENT_VERSION) {
-          setUpdateAvailable(true);
-          setUpdateMsg(data.updateMessage || "New update available!");
-        }
-      })
-      .catch(err => console.log('Version check skipped', err));
+    loadData();
   }, []);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) {
-        checkApproval(session.user.id);
-      } else {
-        setAuthLoading(false);
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      setSession(currentSession);
-      if (currentSession) {
-        checkApproval(currentSession.user.id);
-      } else {
-        setIsApproved(null);
-        setAuthLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  async function checkApproval(userId: string) {
-    try {
-      setAuthLoading(true);
-      const { data } = await supabase
-        .from('user_profiles')
-        .select('is_approved')
-        .eq('id', userId)
-        .single();
-
-      if (data) {
-        setIsApproved(data.is_approved);
-      } else {
-        await supabase.from('user_profiles').insert([{ id: userId, email: session?.user?.email, is_approved: false }]);
-        setIsApproved(false);
-      }
-    } catch (err) {
-      console.error('Approval error:', err);
-      setIsApproved(false);
-    } finally {
-      setAuthLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (session && isApproved) {
-      loadData();
-    }
-  }, [session, isApproved]);
 
   async function loadData() {
     try {
       setLoading(true);
-      const { data: shootsData } = await supabase.from('shoots').select('*').order('date', { ascending: true });
-      const { data: clientsData } = await supabase.from('clients').select('*').order('name', { ascending: true });
+      const { data: shootsData, error: shootsError } = await supabase.from('shoots').select('*').order('date', { ascending: true });
+      const { data: clientsData, error: clientsError } = await supabase.from('clients').select('*').order('name', { ascending: true });
+
+      if (shootsError) console.error('Shoots load error:', shootsError);
+      if (clientsError) console.error('Clients load error:', clientsError);
 
       setShoots(shootsData || []);
       setClients(clientsData || []);
@@ -201,44 +124,11 @@ export default function App() {
     }
   }
 
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError('');
-    setAuthMessage('');
-
-    try {
-      if (isRegistering) {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
-        setAuthMessage('Registration successful! Please check your email to verify your account, then log in.');
-        setIsRegistering(false);
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      }
-    } catch (error: any) {
-      setAuthError(error.message || 'Authentication failed.');
-    }
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setSession(null);
-    setIsApproved(null);
-  };
-
-  const checkStatusAgain = () => {
-    if (session) {
-      checkApproval(session.user.id);
-    }
-  };
-
   const toggleExpand = (id: string) => { setExpandedShootId(expandedShootId === id ? null : id); };
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => { setFormData({ ...formData, [e.target.name]: e.target.value }); };
   const handleClientInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { setClientFormData({ ...clientFormData, [e.target.name]: e.target.value }); };
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) setAvatarFile(e.target.files[0]); };
 
-  // Masraf Kalemi Fonksiyonları
   const addExpenseItem = () => {
     setExpenseItems([...expenseItems, { id: Math.random().toString(36).substring(2, 9), title: '', amount: '' }]);
   };
@@ -309,7 +199,7 @@ export default function App() {
         if (uploadedUrl) avatarUrl = uploadedUrl;
       }
       const { data: newClient, error } = await supabase.from('clients').insert([{ 
-        user_id: session.user.id, 
+        user_id: 'local',
         name: clientFormData.name, 
         phone: clientFormData.phone, 
         email: clientFormData.email, 
@@ -324,7 +214,8 @@ export default function App() {
         setSelectedClientForDetail(newClient[0]);
       }
       setIsClientModalOpen(false);
-    } catch (error) { alert('Failed to add client.'); }
+      loadData();
+    } catch (error) { alert('Müşteri eklenemedi.'); }
   };
 
   const handleShootSubmit = async (e: React.FormEvent) => {
@@ -337,21 +228,17 @@ export default function App() {
       }
       let finalClientId = selectedClientId !== 'new' ? selectedClientId : undefined;
       if (selectedClientId === 'new' && formData.client_name) {
-        const { data: newClient } = await supabase.from('clients').insert([{ user_id: session.user.id, name: formData.client_name, phone: formData.client_phone, email: formData.client_email, avatar_url: avatarUrl }]).select();
+        const { data: newClient } = await supabase.from('clients').insert([{ user_id: 'local', name: formData.client_name, phone: formData.client_phone, email: formData.client_email, avatar_url: avatarUrl }]).select();
         if (newClient && newClient[0]) {
           finalClientId = newClient[0].id;
           setClients(prev => [...prev, newClient[0]]);
         }
-      } else if (finalClientId && avatarFile) {
-        await supabase.from('clients').update({ avatar_url: avatarUrl }).eq('id', finalClientId);
-        setClients(clients.map(c => c.id === finalClientId ? { ...c, avatar_url: avatarUrl } : c));
       }
 
-      // Toplam masrafı kalemlerden hesapla
       const totalExpenseCalculated = expenseItems.reduce((acc, item) => acc + (parseFloat(item.amount) || 0), 0);
 
       const shootPayload = { 
-        user_id: session.user.id, 
+        user_id: 'local',
         client_id: finalClientId, 
         client_name: formData.client_name, 
         client_phone: formData.client_phone, 
@@ -369,27 +256,26 @@ export default function App() {
 
       if (editingShootId) {
         await supabase.from('shoots').update(shootPayload).eq('id', editingShootId);
-        setShoots(shoots.map(s => s.id === editingShootId ? { ...s, ...shootPayload, id: editingShootId, status: s.status } : s));
       } else {
-        const { data } = await supabase.from('shoots').insert([{ ...shootPayload, status: 'planned' }]).select();
-        if (data) setShoots([...shoots, data[0]]);
+        await supabase.from('shoots').insert([{ ...shootPayload, status: 'planned' }]);
       }
       setIsShootModalOpen(false);
       resetForm();
-    } catch (error) { alert('Operation failed.'); }
+      loadData();
+    } catch (error) { alert('İşlem başarısız.'); }
   };
 
   const handleStatusChange = async (id: string, newStatus: 'planned' | 'completed' | 'cancelled', e: React.MouseEvent) => {
     e.stopPropagation();
     await supabase.from('shoots').update({ status: newStatus }).eq('id', id);
-    setShoots(shoots.map(s => s.id === id ? { ...s, status: newStatus } : s));
+    loadData();
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Are you sure?')) return;
+    if (!confirm('Silmek istediğinize emin misiniz?')) return;
     await supabase.from('shoots').delete().eq('id', id);
-    setShoots(shoots.filter(s => s.id !== id));
+    loadData();
   };
 
   const handleOpenEditModal = (shoot: Shoot, e: React.MouseEvent) => {
@@ -440,95 +326,8 @@ export default function App() {
     }
   };
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-5">
-          <div className="text-center space-y-2">
-            <div className="inline-flex p-3 bg-indigo-600/20 text-indigo-400 rounded-xl border border-indigo-500/30">
-              <Camera className="w-8 h-8" />
-            </div>
-            <h1 className="text-2xl font-bold text-white">ShootFlow</h1>
-            <p className="text-xs text-slate-400">Shoot & Client CRM Management</p>
-          </div>
-
-          {authError && <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-xs flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" /><span>{authError}</span></div>}
-          {authMessage && <div className="p-3 bg-emerald-900/50 border border-emerald-700 rounded-lg text-emerald-200 text-xs">{authMessage}</div>}
-
-          <form onSubmit={handleAuth} className="space-y-3.5 text-xs">
-            <div>
-              <label className="block font-medium text-slate-300 mb-1">Email Address</label>
-              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@domain.com" className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:ring-2 focus:ring-indigo-500" />
-            </div>
-            <div>
-              <label className="block font-medium text-slate-300 mb-1">Password</label>
-              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:ring-2 focus:ring-indigo-500" />
-            </div>
-            <button type="submit" className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition shadow-lg shadow-indigo-600/30 text-xs">
-              {isRegistering ? 'Sign Up' : 'Sign In'}
-            </button>
-          </form>
-
-          <div className="text-center pt-2 border-t border-slate-700/60">
-            <button onClick={() => { setIsRegistering(!isRegistering); setAuthError(''); setAuthMessage(''); }} className="text-xs text-indigo-400 hover:underline">
-              {isRegistering ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isApproved) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-8 shadow-2xl text-center space-y-5">
-          <div className="inline-flex p-4 bg-amber-500/20 text-amber-400 rounded-2xl border border-amber-500/30">
-            <ShieldCheck className="w-10 h-10" />
-          </div>
-          <h1 className="text-xl font-bold text-white">Admin Approval Required</h1>
-          <p className="text-xs text-slate-300 leading-relaxed">
-            Your account is currently waiting for administrator approval (or subscription renewal). Once approved, click below to access your dashboard.
-          </p>
-
-          <div className="flex flex-col gap-2 pt-2">
-            <button onClick={checkStatusAgain} className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition text-xs shadow">
-              Check Status / Refresh
-            </button>
-            <button onClick={handleLogout} className="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-lg transition text-xs flex items-center justify-center gap-2">
-              <LogOut className="w-4 h-4" /> Sign Out
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 relative">
-      {updateAvailable && (
-        <div className="bg-indigo-600 text-white px-4 py-3 text-xs flex flex-col sm:flex-row items-center justify-between gap-2 shadow-lg sticky top-0 z-50">
-          <div className="flex items-center gap-2">
-            <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
-            <span className="font-medium">{updateMsg}</span>
-          </div>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="px-3 py-1.5 bg-white text-indigo-700 font-bold rounded-lg shadow hover:bg-indigo-50 transition flex items-center gap-1 shrink-0"
-          >
-            <Download className="w-3.5 h-3.5" /> Update & Refresh
-          </button>
-        </div>
-      )}
-
       <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap gap-3 justify-between items-center">
           <div className="flex items-center space-x-3">
@@ -539,24 +338,15 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-700 overflow-x-auto max-w-full">
-            <button onClick={() => setActiveTab('shoots')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ${activeTab === 'shoots' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>
-              <Calendar className="w-3.5 h-3.5" /><span>Shoot Calendar</span>
-            </button>
-            <button onClick={() => setActiveTab('clients')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ${activeTab === 'clients' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>
-              <Users className="w-3.5 h-3.5" /><span>Client Portfolio</span>
-            </button>
-            <button onClick={() => setActiveTab('reports')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ${activeTab === 'reports' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>
-              <FileText className="w-3.5 h-3.5" /><span>Reports</span>
-            </button>
+          <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-700">
+            <button onClick={() => setActiveTab('shoots')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'shoots' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Shoot Calendar</button>
+            <button onClick={() => setActiveTab('clients')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'clients' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Client Portfolio</button>
+            <button onClick={() => setActiveTab('reports')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'reports' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Reports</button>
           </div>
 
           <div className="flex items-center gap-2">
-            <button onClick={handleOpenAddShootModal} className="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg font-medium transition text-xs shadow whitespace-nowrap">
+            <button onClick={handleOpenAddShootModal} className="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg font-medium text-xs shadow">
               <Plus className="w-4 h-4" /><span>New Shoot</span>
-            </button>
-            <button onClick={handleLogout} className="p-1.5 bg-slate-700 hover:bg-red-900/60 text-slate-300 hover:text-red-300 rounded-lg border border-slate-600 transition" title="Log Out">
-              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -564,28 +354,28 @@ export default function App() {
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {activeTab !== 'reports' && (
-        <div className="flex flex-col md:flex-row gap-3 mb-6 justify-between items-center">
-          <div className="relative w-full md:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input type="text" placeholder={activeTab === 'shoots' ? "Search shoot or client..." : "Search client..."} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm" />
-          </div>
-
-          {activeTab === 'shoots' ? (
-            <div className="flex items-center space-x-2 w-full md:w-auto">
-              <Filter className="w-4 h-4 text-slate-400" />
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg p-2 w-full md:w-auto">
-                <option value="all">All Statuses</option>
-                <option value="planned">Planned</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
+          <div className="flex flex-col md:flex-row gap-3 mb-6 justify-between items-center">
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input type="text" placeholder={activeTab === 'shoots' ? "Search shoot or client..." : "Search client..."} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm" />
             </div>
-          ) : (
-            <button onClick={handleOpenAddClientModal} className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-lg font-medium transition text-xs shadow w-full md:w-auto justify-center">
-              <UserPlus className="w-4 h-4" /><span>Add New Client</span>
-            </button>
-          )}
-        </div>
+
+            {activeTab === 'shoots' ? (
+              <div className="flex items-center space-x-2 w-full md:w-auto">
+                <Filter className="w-4 h-4 text-slate-400" />
+                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg p-2 w-full md:w-auto">
+                  <option value="all">All Statuses</option>
+                  <option value="planned">Planned</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+            ) : (
+              <button onClick={handleOpenAddClientModal} className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-lg font-medium transition text-xs shadow w-full md:w-auto justify-center">
+                <UserPlus className="w-4 h-4" /><span>Add New Client</span>
+              </button>
+            )}
+          </div>
         )}
 
         {activeTab === 'shoots' && (
@@ -636,7 +426,6 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Masraf Kalemleri Detay Listesi */}
                         {shoot.expense_items && shoot.expense_items.length > 0 && (
                           <div className="bg-slate-800/60 border border-slate-700/60 rounded-lg p-2.5 space-y-1.5">
                             <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
@@ -863,7 +652,6 @@ export default function App() {
                 <input type="number" name="price" placeholder="0.00" value={formData.price} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
               </div>
 
-              {/* Dinamik Masraf Kalemleri Bölümü */}
               <div className="bg-slate-900/60 border border-slate-700/80 p-3 rounded-lg space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="font-semibold text-slate-300 flex items-center gap-1.5">
