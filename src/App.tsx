@@ -332,11 +332,9 @@ export default function App() {
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
-      // Planlananlar (planned) veya aktif çekimler her zaman en üstte olsun, tamamlananlar aşağıda kalsın
       if (a.status === 'planned' && b.status !== 'planned') return -1;
       if (a.status !== 'planned' && b.status === 'planned') return 1;
 
-      // Aynı statüdeyse tarihe göre en yakından en uzağa sırala
       const dateA = a.date ? new Date(`${a.date}T${a.time || '00:00'}`).getTime() : 0;
       const dateB = b.date ? new Date(`${b.date}T${b.time || '00:00'}`).getTime() : 0;
       return dateA - dateB;
@@ -427,7 +425,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
       <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap gap-3 justify-between items-center">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-indigo-600 rounded-lg"><Camera className="w-6 h-6 text-white" /></div>
             <div>
@@ -436,17 +434,17 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-700">
-            <button onClick={() => setActiveTab('shoots')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'shoots' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>
+          <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-700 overflow-x-auto max-w-full">
+            <button onClick={() => setActiveTab('shoots')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ${activeTab === 'shoots' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>
               <Calendar className="w-3.5 h-3.5" /><span>Shoot Calendar</span>
             </button>
-            <button onClick={() => setActiveTab('clients')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'clients' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>
+            <button onClick={() => setActiveTab('clients')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ${activeTab === 'clients' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>
               <Users className="w-3.5 h-3.5" /><span>Client Portfolio</span>
             </button>
           </div>
 
           <div className="flex items-center gap-2">
-            <button onClick={handleOpenAddShootModal} className="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-1.5 rounded-lg font-medium transition text-xs shadow">
+            <button onClick={handleOpenAddShootModal} className="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg font-medium transition text-xs shadow whitespace-nowrap">
               <Plus className="w-4 h-4" /><span>New Shoot</span>
             </button>
             <button onClick={handleLogout} className="p-1.5 bg-slate-700 hover:bg-red-900/60 text-slate-300 hover:text-red-300 rounded-lg border border-slate-600 transition" title="Log Out">
