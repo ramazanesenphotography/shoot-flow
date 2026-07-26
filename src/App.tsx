@@ -226,11 +226,11 @@ export default function App() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
-        return <span className="inline-flex items-center justify-center w-28 py-1 rounded-full text-xs font-medium bg-green-900/40 text-green-300 border border-green-700/50"><CheckCircle className="w-3 h-3 mr-1" /> Tamamlandı</span>;
+        return <span className="inline-flex items-center justify-center w-24 py-1 rounded-full text-xs font-medium bg-green-900/40 text-green-300 border border-green-700/50"><CheckCircle className="w-3 h-3 mr-1" /> Tamam</span>;
       case 'cancelled':
-        return <span className="inline-flex items-center justify-center w-28 py-1 rounded-full text-xs font-medium bg-red-900/40 text-red-300 border border-red-700/50"><XCircle className="w-3 h-3 mr-1" /> İptal</span>;
+        return <span className="inline-flex items-center justify-center w-24 py-1 rounded-full text-xs font-medium bg-red-900/40 text-red-300 border border-red-700/50"><XCircle className="w-3 h-3 mr-1" /> İptal</span>;
       default:
-        return <span className="inline-flex items-center justify-center w-28 py-1 rounded-full text-xs font-medium bg-blue-900/40 text-blue-300 border border-blue-700/50"><Clock className="w-3 h-3 mr-1" /> Planlandı</span>;
+        return <span className="inline-flex items-center justify-center w-24 py-1 rounded-full text-xs font-medium bg-blue-900/40 text-blue-300 border border-blue-700/50"><Clock className="w-3 h-3 mr-1" /> Planlandı</span>;
     }
   };
 
@@ -333,14 +333,14 @@ export default function App() {
                     {/* Sağ: SABİT BÖLMELİ TARİH / SAAT / DURUM */}
                     <div className="flex items-center space-x-2 shrink-0 text-xs">
                       
-                      {/* Tarih Bölmesi (Sabit Genişlik) */}
-                      <div className="hidden sm:flex items-center justify-center w-32 py-1.5 px-2 bg-slate-900/80 rounded-lg border border-slate-700/60 text-slate-200 font-medium">
-                        <Calendar className="w-3.5 h-3.5 text-indigo-400 mr-1.5 shrink-0" />
+                      {/* Tarih Bölmesi (Sabit w-28) */}
+                      <div className="hidden sm:flex items-center justify-center w-28 py-1 px-2 bg-slate-900/80 rounded-lg border border-slate-700/60 text-slate-200 font-medium">
+                        <Calendar className="w-3.5 h-3.5 text-indigo-400 mr-1 shrink-0" />
                         <span>{shoot.date || 'Tarihsiz'}</span>
                       </div>
 
-                      {/* Saat Bölmesi (Sabit Genişlik - Boşsa --:-- yazar, düzen bozulmaz) */}
-                      <div className={`hidden md:flex items-center justify-center w-20 py-1.5 px-2 bg-slate-900/80 rounded-lg border border-slate-700/60 font-medium ${shoot.time ? 'text-slate-200' : 'text-slate-500'}`}>
+                      {/* Saat Bölmesi (Sabit w-16 - Boşsa --:-- yazar) */}
+                      <div className={`hidden sm:flex items-center justify-center w-16 py-1 px-2 bg-slate-900/80 rounded-lg border border-slate-700/60 font-medium ${shoot.time ? 'text-slate-200' : 'text-slate-500'}`}>
                         <Clock className={`w-3.5 h-3.5 mr-1 shrink-0 ${shoot.time ? 'text-indigo-400' : 'text-slate-600'}`} />
                         <span>{shoot.time || '--:--'}</span>
                       </div>
@@ -358,8 +358,8 @@ export default function App() {
                   {/* AÇILAN DETAY ALANI */}
                   {isExpanded && (
                     <div className="p-4 bg-slate-900/90 border-t border-slate-700/60 space-y-3 text-xs">
-                      {/* Mobil ve Küçük Ekranlar İçin Tarih/Saat Detayı */}
-                      <div className="flex md:hidden items-center gap-3 text-slate-300 pb-2 border-b border-slate-800">
+                      {/* Mobil Ekran Tarih/Saat Gösterimi */}
+                      <div className="flex sm:hidden items-center gap-3 text-slate-300 pb-2 border-b border-slate-800">
                         <div className="flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5 text-indigo-400" />
                           <span>{shoot.date || 'Tarih Belirtilmedi'}</span>
