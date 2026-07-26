@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Camera, 
   Calendar, 
@@ -83,6 +83,16 @@ export default function App() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+
+  // Client archive filters
+  const [showClientFilters, setShowClientFilters] = useState(false);
+  const [clientSort, setClientSort] = useState<'az' | 'za' | 'recent' | 'oldest' | 'mostJobs' | 'leastJobs' | 'highestRevenue'>('az');
+  const [clientWorkStatus, setClientWorkStatus] = useState<'all' | 'withJobs' | 'withoutJobs'>('all');
+  const [clientShootStatus, setClientShootStatus] = useState<'all' | 'planned' | 'completed' | 'cancelled'>('all');
+  const [clientShootType, setClientShootType] = useState('all');
+  const [clientDateFrom, setClientDateFrom] = useState('');
+  const [clientDateTo, setClientDateTo] = useState('');
+  const [clientShootSearch, setClientShootSearch] = useState('');
 
   const [expandedShootId, setExpandedShootId] = useState<string | null>(null);
   const [selectedClientForDetail, setSelectedClientForDetail] = useState<Client | null>(null);
@@ -360,22 +370,224 @@ export default function App() {
     setIsShootModalOpen(true);
   };
 
-  const filteredShoots = shoots
-    .filter(s => {
-      const matchesSearch = (s.client_name && s.client_name.toLowerCase().includes(searchTerm.toLowerCase())) || (s.location && s.location.toLowerCase().includes(searchTerm.toLowerCase()));
-      const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
-      return matchesSearch && matchesStatus;
-    })
-    .sort((a, b) => {
-      if (a.status === 'planned' && b.status !== 'planned') return -1;
-      if (a.status !== 'planned' && b.status === 'planned') return 1;
+  const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase('tr-TR');
 
-      const dateA = a.date ? new Date(`${a.date}T${a.time || '00:00'}`).getTime() : 0;
-      const dateB = b.date ? new Date(`${b.date}T${b.time || '00:00'}`).getTime() : 0;
-      return dateA - dateB;
+  const clientById = useMemo(() => {
+    const map = new Map<string, Client>();
+    clients.forEach(client => map.set(client.id, client));
+    return map;
+  }, [clients]);
+
+  const clientStats = useMemo(() => {
+    const stats = new Map<string, {
+      shoots: Shoot[];
+      totalRevenue: number;
+      firstDate: string;
+      lastDate: string;
+    }>();
+
+    clients.forEach(client => {
+      stats.set(client.id, { shoots: [], totalRevenue: 0, firstDate: '', lastDate: '' });
     });
 
-  const filteredClients = clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || (c.phone && c.phone.includes(searchTerm)));
+    shoots.forEach(shoot => {
+      let clientId = shoot.client_id;
+
+      if (!clientId && shoot.client_name) {
+        const normalizedName = shoot.client_name.trim().toLocaleLowerCase('tr-TR');
+        const matchedClient = clients.find(
+          client => client.name.trim().toLocaleLowerCase('tr-TR') === normalizedName
+        );
+        clientId = matchedClient?.id;
+      }
+
+      if (!clientId) return;
+
+      const current = stats.get(clientId) || { shoots: [], totalRevenue: 0, firstDate: '', lastDate: '' };
+      current.shoots.push(shoot);
+      current.totalRevenue += Number(shoot.price) || 0;
+
+      if (shoot.date) {
+        if (!current.firstDate || shoot.date < current.firstDate) current.firstDate = shoot.date;
+        if (!current.lastDate || shoot.date > current.lastDate) current.lastDate = shoot.date;
+      }
+
+      stats.set(clientId, current);
+    });
+
+    stats.forEach(stat => {
+      stat.shoots.sort((a, b) => {
+        const dateA = a.date ? new Date(`${a.date}T${a.time || '00:00'}`).getTime() : 0;
+        const dateB = b.date ? new Date(`${b.date}T${b.time || '00:00'}`).getTime() : 0;
+        return dateB - dateA;
+      });
+    });
+
+    return stats;
+  }, [clients, shoots]);
+
+  const shootTypes = useMemo(() => {
+    return Array.from(new Set(shoots.map(shoot => shoot.shoot_type).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, 'tr'));
+  }, [shoots]);
+
+  const filteredShoots = useMemo(() => {
+    return shoots
+      .filter(s => {
+        const clientName = (s.client_name || '').toLocaleLowerCase('tr-TR');
+        const location = (s.location || '').toLocaleLowerCase('tr-TR');
+        const shootType = (s.shoot_type || '').toLocaleLowerCase('tr-TR');
+        const matchesSearch =
+          !normalizedSearchTerm ||
+          clientName.includes(normalizedSearchTerm) ||
+          location.includes(normalizedSearchTerm) ||
+          shootType.includes(normalizedSearchTerm);
+        const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
+        return matchesSearch && matchesStatus;
+      })
+      .sort((a, b) => {
+        if (a.status === 'planned' && b.status !== 'planned') return -1;
+        if (a.status !== 'planned' && b.status === 'planned') return 1;
+
+        const dateA = a.date ? new Date(`${a.date}T${a.time || '00:00'}`).getTime() : 0;
+        const dateB = b.date ? new Date(`${b.date}T${b.time || '00:00'}`).getTime() : 0;
+        return dateA - dateB;
+      });
+  }, [shoots, normalizedSearchTerm, filterStatus]);
+
+  const filteredClients = useMemo(() => {
+    const result = clients.filter(client => {
+      const stat = clientStats.get(client.id);
+      const clientShoots = stat?.shoots || [];
+
+      const matchesName =
+        !normalizedSearchTerm ||
+        client.name.toLocaleLowerCase('tr-TR').includes(normalizedSearchTerm);
+
+      const matchesWorkStatus =
+        clientWorkStatus === 'all' ||
+        (clientWorkStatus === 'withJobs' && clientShoots.length > 0) ||
+        (clientWorkStatus === 'withoutJobs' && clientShoots.length === 0);
+
+      const matchingShoots = clientShoots.filter(shoot => {
+        const matchesStatus = clientShootStatus === 'all' || shoot.status === clientShootStatus;
+        const matchesType = clientShootType === 'all' || shoot.shoot_type === clientShootType;
+        const matchesFrom = !clientDateFrom || (shoot.date && shoot.date >= clientDateFrom);
+        const matchesTo = !clientDateTo || (shoot.date && shoot.date <= clientDateTo);
+        return matchesStatus && matchesType && matchesFrom && matchesTo;
+      });
+
+      const hasAdvancedShootFilter =
+        clientShootStatus !== 'all' ||
+        clientShootType !== 'all' ||
+        Boolean(clientDateFrom) ||
+        Boolean(clientDateTo);
+
+      return matchesName && matchesWorkStatus && (!hasAdvancedShootFilter || matchingShoots.length > 0);
+    });
+
+    return result.sort((a, b) => {
+      const statsA = clientStats.get(a.id);
+      const statsB = clientStats.get(b.id);
+
+      switch (clientSort) {
+        case 'za':
+          return b.name.localeCompare(a.name, 'tr');
+        case 'recent':
+          return (statsB?.lastDate || '').localeCompare(statsA?.lastDate || '');
+        case 'oldest':
+          return (statsA?.firstDate || '9999').localeCompare(statsB?.firstDate || '9999');
+        case 'mostJobs':
+          return (statsB?.shoots.length || 0) - (statsA?.shoots.length || 0);
+        case 'leastJobs':
+          return (statsA?.shoots.length || 0) - (statsB?.shoots.length || 0);
+        case 'highestRevenue':
+          return (statsB?.totalRevenue || 0) - (statsA?.totalRevenue || 0);
+        default:
+          return a.name.localeCompare(b.name, 'tr');
+      }
+    });
+  }, [
+    clients,
+    clientStats,
+    normalizedSearchTerm,
+    clientWorkStatus,
+    clientShootStatus,
+    clientShootType,
+    clientDateFrom,
+    clientDateTo,
+    clientSort
+  ]);
+
+  const selectedClientShoots = useMemo(() => {
+    if (!selectedClientForDetail) return [];
+
+    const baseShoots = clientStats.get(selectedClientForDetail.id)?.shoots || [];
+    const search = clientShootSearch.trim().toLocaleLowerCase('tr-TR');
+
+    return baseShoots.filter(shoot => {
+      const matchesStatus = clientShootStatus === 'all' || shoot.status === clientShootStatus;
+      const matchesType = clientShootType === 'all' || shoot.shoot_type === clientShootType;
+      const matchesFrom = !clientDateFrom || (shoot.date && shoot.date >= clientDateFrom);
+      const matchesTo = !clientDateTo || (shoot.date && shoot.date <= clientDateTo);
+      const searchableText = [
+        shoot.shoot_type,
+        shoot.location,
+        shoot.notes,
+        shoot.date,
+        shoot.time,
+        String(shoot.price || ''),
+        shoot.status
+      ].join(' ').toLocaleLowerCase('tr-TR');
+
+      return matchesStatus && matchesType && matchesFrom && matchesTo && (!search || searchableText.includes(search));
+    });
+  }, [
+    selectedClientForDetail,
+    clientStats,
+    clientShootSearch,
+    clientShootStatus,
+    clientShootType,
+    clientDateFrom,
+    clientDateTo
+  ]);
+
+  const selectedClientSummary = useMemo(() => {
+    if (!selectedClientForDetail) {
+      return { totalJobs: 0, totalRevenue: 0, firstDate: '', lastDate: '', averagePrice: 0 };
+    }
+
+    const stat = clientStats.get(selectedClientForDetail.id);
+    const totalJobs = stat?.shoots.length || 0;
+    const totalRevenue = stat?.totalRevenue || 0;
+
+    return {
+      totalJobs,
+      totalRevenue,
+      firstDate: stat?.firstDate || '',
+      lastDate: stat?.lastDate || '',
+      averagePrice: totalJobs ? totalRevenue / totalJobs : 0
+    };
+  }, [selectedClientForDetail, clientStats]);
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(value);
+
+  const formatDate = (value?: string) => {
+    if (!value) return 'Kayıt yok';
+    return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' })
+      .format(new Date(`${value}T00:00:00`));
+  };
+
+  const resetClientFilters = () => {
+    setClientSort('az');
+    setClientWorkStatus('all');
+    setClientShootStatus('all');
+    setClientShootType('all');
+    setClientDateFrom('');
+    setClientDateTo('');
+    setClientShootSearch('');
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -537,7 +749,9 @@ export default function App() {
             <div className="space-y-2">
               {filteredShoots.map((shoot) => {
                 const isExpanded = expandedShootId === shoot.id;
-                const client = clients.find(c => c.id === shoot.client_id || c.name.toLowerCase() === shoot.client_name.toLowerCase());
+                const client = shoot.client_id
+                  ? clientById.get(shoot.client_id)
+                  : clients.find(c => c.name.toLocaleLowerCase('tr-TR') === shoot.client_name.toLocaleLowerCase('tr-TR'));
                 return (
                   <div key={shoot.id} className="bg-slate-800 border border-slate-700/80 rounded-xl overflow-hidden shadow-sm">
                     <div onClick={() => toggleExpand(shoot.id)} className="p-3.5 cursor-pointer flex items-center justify-between gap-3 hover:bg-slate-700/50 transition">
@@ -581,102 +795,289 @@ export default function App() {
         )}
 
         {activeTab === 'clients' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-1 space-y-2">
-              <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Clients ({filteredClients.length})</h2>
-              {filteredClients.map(client => (
-                <div key={client.id} onClick={() => setSelectedClientForDetail(client)} className={`p-3 rounded-xl border cursor-pointer transition flex justify-between items-center ${selectedClientForDetail?.id === client.id ? 'bg-indigo-950/60 border-indigo-500' : 'bg-slate-800 border-slate-700'}`}>
-                  <div className="flex items-center space-x-3">
-                    {client.avatar_url ? <img src={client.avatar_url} alt={client.name} className="w-10 h-10 rounded-lg object-cover" /> : <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center text-indigo-400"><User className="w-5 h-5" /></div>}
-                    <div><h3 className="font-semibold text-slate-100 text-sm">{client.name}</h3><p className="text-xs text-slate-400">{client.phone || 'No phone'}</p></div>
-                  </div>
+          <div className="space-y-4">
+            <div className="bg-slate-800 border border-slate-700 rounded-xl p-3">
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+                <div className="text-xs text-slate-400">
+                  <span className="font-semibold text-slate-200">{filteredClients.length}</span> müşteri gösteriliyor
                 </div>
-              ))}
-            </div>
-            <div className="md:col-span-2">
-              {selectedClientForDetail ? (
-                <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-5">
-                  <div className="flex items-center space-x-4 border-b border-slate-700 pb-4">
-                    {selectedClientForDetail.avatar_url ? (
-                      <img src={selectedClientForDetail.avatar_url} alt={selectedClientForDetail.name} className="w-16 h-16 rounded-xl object-cover border border-indigo-500/50" />
-                    ) : (
-                      <div className="w-16 h-16 rounded-xl bg-slate-700 flex items-center justify-center text-indigo-400">
-                        <User className="w-8 h-8" />
-                      </div>
-                    )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowClientFilters(!showClientFilters)}
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-200"
+                  >
+                    <Filter className="w-3.5 h-3.5" />
+                    {showClientFilters ? 'Filtreleri Kapat' : 'Detaylı Filtre'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetClientFilters}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700 text-xs text-slate-200"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Sıfırla
+                  </button>
+                </div>
+              </div>
+
+              {showClientFilters && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3 pt-3 border-t border-slate-700 text-xs">
                   <div>
-                    <h2 className="text-xl font-bold text-slate-100">{selectedClientForDetail.name}</h2>
-                    <p className="text-xs text-indigo-400 font-medium">Client Archive & Detail Card</p>
+                    <label className="block text-slate-400 mb-1">Sıralama</label>
+                    <select value={clientSort} onChange={(e) => setClientSort(e.target.value as typeof clientSort)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100">
+                      <option value="az">İsim A–Z</option>
+                      <option value="za">İsim Z–A</option>
+                      <option value="recent">En son çalışılan</option>
+                      <option value="oldest">İlk çalışması en eski</option>
+                      <option value="mostJobs">En çok çalışılan</option>
+                      <option value="leastJobs">En az çalışılan</option>
+                      <option value="highestRevenue">En yüksek kazanç</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 mb-1">Müşteri durumu</label>
+                    <select value={clientWorkStatus} onChange={(e) => setClientWorkStatus(e.target.value as typeof clientWorkStatus)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100">
+                      <option value="all">Tüm müşteriler</option>
+                      <option value="withJobs">Çalışması olanlar</option>
+                      <option value="withoutJobs">Henüz çalışılmayanlar</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 mb-1">Çalışma durumu</label>
+                    <select value={clientShootStatus} onChange={(e) => setClientShootStatus(e.target.value as typeof clientShootStatus)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100">
+                      <option value="all">Tüm durumlar</option>
+                      <option value="completed">Tamamlandı</option>
+                      <option value="planned">Planlandı</option>
+                      <option value="cancelled">İptal edildi</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 mb-1">Çekim türü</label>
+                    <select value={clientShootType} onChange={(e) => setClientShootType(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100">
+                      <option value="all">Tüm çekim türleri</option>
+                      {shootTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 mb-1">Başlangıç tarihi</label>
+                    <input type="date" value={clientDateFrom} onChange={(e) => setClientDateFrom(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100" />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 mb-1">Bitiş tarihi</label>
+                    <input type="date" value={clientDateTo} onChange={(e) => setClientDateTo(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100" />
                   </div>
                 </div>
+              )}
+            </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1">
-                      <span className="text-slate-400 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-indigo-400" /> Phone</span>
-                      <p className="font-semibold text-slate-200">{selectedClientForDetail.phone || 'Not specified'}</p>
-                    </div>
-                    <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1">
-                      <span className="text-slate-400 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-indigo-400" /> Email</span>
-                      <p className="font-semibold text-slate-200 truncate">{selectedClientForDetail.email || 'Not specified'}</p>
-                    </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="md:col-span-1 space-y-2">
+                <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Güncel Müşteri Listesi</h2>
+
+                {filteredClients.length === 0 ? (
+                  <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 text-center text-xs text-slate-400">
+                    Filtrelere uygun müşteri bulunamadı.
                   </div>
-
-                <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1 text-xs">
-                    <span className="text-slate-400 flex items-center gap-1.5"><Home className="w-3.5 h-3.5 text-indigo-400" /> Address</span>
-                    <p className="text-slate-200">{selectedClientForDetail.address || 'No address recorded.'}</p>
-                  </div>
-
-                <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1 text-xs">
-                    <span className="text-slate-400 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-indigo-400" /> Client Notes</span>
-                    <p className="text-slate-300 italic">{selectedClientForDetail.notes || 'No client notes added.'}</p>
-                  </div>
-
-                <div className="space-y-3 pt-3 border-t border-slate-700">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                        <History className="w-4 h-4 text-indigo-400" /> Past Shoots & Earnings Archive
-                      </h3>
-                      {(() => {
-                        const clientShoots = shoots.filter(s => s.client_id === selectedClientForDetail.id || (s.client_name && s.client_name.toLowerCase() === selectedClientForDetail.name.toLowerCase()));
-                        const totalEarnings = clientShoots.reduce((acc, s) => acc + (Number(s.price) || 0), 0);
-                        return (
-                          <div className="text-xs font-bold text-green-400 bg-green-950/60 border border-green-800/60 px-2.5 py-1 rounded-lg">
-                            Total Earnings: ₺{totalEarnings}
+                ) : filteredClients.map(client => {
+                  const stat = clientStats.get(client.id);
+                  return (
+                    <button
+                      type="button"
+                      key={client.id}
+                      onClick={() => setSelectedClientForDetail(client)}
+                      className={`w-full text-left p-3 rounded-xl border transition flex justify-between items-center gap-3 ${
+                        selectedClientForDetail?.id === client.id
+                          ? 'bg-indigo-950/60 border-indigo-500'
+                          : 'bg-slate-800 border-slate-700 hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3 min-w-0">
+                        {client.avatar_url ? (
+                          <img loading="lazy" src={client.avatar_url} alt={client.name} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center text-indigo-400 shrink-0">
+                            <User className="w-5 h-5" />
                           </div>
-                        );
-                      })()}
+                        )}
+                        <div className="min-w-0">
+                          <h3 className="font-semibold text-slate-100 text-sm truncate">{client.name}</h3>
+                          <p className="text-xs text-slate-400 truncate">{client.phone || 'Telefon eklenmemiş'}</p>
+                          <p className="text-[11px] text-indigo-300 mt-0.5">
+                            {stat?.shoots.length || 0} çalışma
+                            {stat?.lastDate ? ` • Son: ${formatDate(stat.lastDate)}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="md:col-span-2">
+                {selectedClientForDetail ? (
+                  <div className="space-y-4">
+                    <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4">
+                      <div className="flex items-center space-x-4 border-b border-slate-700 pb-4">
+                        {selectedClientForDetail.avatar_url ? (
+                          <img loading="lazy" src={selectedClientForDetail.avatar_url} alt={selectedClientForDetail.name} className="w-16 h-16 rounded-xl object-cover border border-indigo-500/50" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-xl bg-slate-700 flex items-center justify-center text-indigo-400">
+                            <User className="w-8 h-8" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <h2 className="text-xl font-bold text-slate-100 truncate">{selectedClientForDetail.name}</h2>
+                          <p className="text-xs text-indigo-400 font-medium">Müşteri Arşivi ve İletişim Bilgileri</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
+                        <div className="bg-slate-900/70 p-3 rounded-lg border border-slate-700/60">
+                          <div className="text-[11px] text-slate-400">Toplam çalışma</div>
+                          <div className="text-lg font-bold text-white">{selectedClientSummary.totalJobs}</div>
+                        </div>
+                        <div className="bg-slate-900/70 p-3 rounded-lg border border-slate-700/60">
+                          <div className="text-[11px] text-slate-400">Toplam kazanç</div>
+                          <div className="text-sm font-bold text-green-400">{formatCurrency(selectedClientSummary.totalRevenue)}</div>
+                        </div>
+                        <div className="bg-slate-900/70 p-3 rounded-lg border border-slate-700/60">
+                          <div className="text-[11px] text-slate-400">Ortalama ücret</div>
+                          <div className="text-sm font-bold text-slate-200">{formatCurrency(selectedClientSummary.averagePrice)}</div>
+                        </div>
+                        <div className="bg-slate-900/70 p-3 rounded-lg border border-slate-700/60">
+                          <div className="text-[11px] text-slate-400">İlk çalışma</div>
+                          <div className="text-xs font-semibold text-slate-200">{formatDate(selectedClientSummary.firstDate)}</div>
+                        </div>
+                        <div className="bg-slate-900/70 p-3 rounded-lg border border-slate-700/60 col-span-2 lg:col-span-1">
+                          <div className="text-[11px] text-slate-400">Son çalışma</div>
+                          <div className="text-xs font-semibold text-slate-200">{formatDate(selectedClientSummary.lastDate)}</div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60">
+                          <span className="text-slate-400 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-indigo-400" /> Telefon</span>
+                          <p className="font-semibold text-slate-200 mt-1">{selectedClientForDetail.phone || 'Belirtilmemiş'}</p>
+                        </div>
+                        <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60">
+                          <span className="text-slate-400 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-indigo-400" /> E-posta</span>
+                          <p className="font-semibold text-slate-200 truncate mt-1">{selectedClientForDetail.email || 'Belirtilmemiş'}</p>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 text-xs">
+                        <span className="text-slate-400 flex items-center gap-1.5"><Home className="w-3.5 h-3.5 text-indigo-400" /> Adres</span>
+                        <p className="text-slate-200 mt-1">{selectedClientForDetail.address || 'Adres kaydı yok.'}</p>
+                      </div>
+
+                      <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 text-xs">
+                        <span className="text-slate-400 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-indigo-400" /> Müşteri notları</span>
+                        <p className="text-slate-300 italic mt-1">{selectedClientForDetail.notes || 'Müşteri notu eklenmemiş.'}</p>
+                      </div>
                     </div>
 
-                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                      {shoots.filter(s => s.client_id === selectedClientForDetail.id || (s.client_name && s.client_name.toLowerCase() === selectedClientForDetail.name.toLowerCase())).length === 0 ? (
-                        <p className="text-xs text-slate-500 italic bg-slate-900/40 p-3 rounded-lg text-center">No past shoot records found for this client.</p>
-                      ) : (
-                        shoots
-                          .filter(s => s.client_id === selectedClientForDetail.id || (s.client_name && s.client_name.toLowerCase() === selectedClientForDetail.name.toLowerCase()))
-                          .map(shoot => (
-                            <div key={shoot.id} className="bg-slate-900/80 border border-slate-700/60 rounded-lg p-3 flex items-center justify-between text-xs gap-2">
-                              <div className="space-y-0.5">
-                                <div className="font-semibold text-slate-200">{shoot.shoot_type}</div>
-                                <div className="text-slate-400 flex items-center gap-2">
-                                  <span><Calendar className="w-3 h-3 inline mr-1 text-indigo-400" />{shoot.date || 'No date'}</span>
-                                  <span><MapPin className="w-3 h-3 inline mr-1 text-indigo-400" />{shoot.location || 'No location'}</span>
+                    <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <History className="w-4 h-4 text-indigo-400" /> Çalışma Geçmişi
+                        </h3>
+                        <div className="text-xs text-slate-400">
+                          {selectedClientShoots.length} kayıt gösteriliyor
+                        </div>
+                      </div>
+
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                        <input
+                          type="text"
+                          value={clientShootSearch}
+                          onChange={(e) => setClientShootSearch(e.target.value)}
+                          placeholder="Çekim türü, konum, not, tarih veya ücret ara..."
+                          className="w-full pl-10 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-100"
+                        />
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {(['all', 'completed', 'planned', 'cancelled'] as const).map(status => (
+                          <button
+                            type="button"
+                            key={status}
+                            onClick={() => setClientShootStatus(status)}
+                            className={`px-3 py-1.5 rounded-lg text-xs border ${
+                              clientShootStatus === status
+                                ? 'bg-indigo-600 border-indigo-500 text-white'
+                                : 'bg-slate-900 border-slate-700 text-slate-300'
+                            }`}
+                          >
+                            {status === 'all' ? 'Tümü' : status === 'completed' ? 'Tamamlandı' : status === 'planned' ? 'Planlandı' : 'İptal'}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="space-y-2 max-h-[620px] overflow-y-auto pr-1">
+                        {selectedClientShoots.length === 0 ? (
+                          <p className="text-xs text-slate-500 italic bg-slate-900/40 p-5 rounded-lg text-center">
+                            Bu filtrelere uygun çalışma kaydı bulunamadı.
+                          </p>
+                        ) : selectedClientShoots.map(shoot => (
+                          <div key={shoot.id} className="bg-slate-900/80 border border-slate-700/60 rounded-xl p-4 text-xs space-y-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="font-bold text-slate-100 text-sm">{shoot.shoot_type || 'Çekim'}</div>
+                                <div className="text-slate-400 mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                                  <span><Calendar className="w-3 h-3 inline mr-1 text-indigo-400" />{formatDate(shoot.date)}</span>
+                                  {shoot.time && <span><Clock className="w-3 h-3 inline mr-1 text-indigo-400" />{shoot.time}</span>}
+                                  <span><MapPin className="w-3 h-3 inline mr-1 text-indigo-400" />{shoot.location || 'Konum belirtilmemiş'}</span>
                                 </div>
                               </div>
-                              <div className="text-right space-y-1 shrink-0">
-                                <div className="font-bold text-green-400">₺{shoot.price || 0}</div>
-                                <div>{getStatusBadge(shoot.status)}</div>
+                              <div className="text-right shrink-0">
+                                <div className="font-bold text-green-400 text-sm">{formatCurrency(Number(shoot.price) || 0)}</div>
+                                <div className="mt-1">{getStatusBadge(shoot.status)}</div>
                               </div>
                             </div>
-                          ))
-                      )}
+
+                            {shoot.notes && (
+                              <div className="bg-slate-800/70 border border-slate-700/50 rounded-lg p-2.5 text-slate-300 italic">
+                                “{shoot.notes}”
+                              </div>
+                            )}
+
+                            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
+                              <div>
+                                {shoot.drive_link && (
+                                  <a href={shoot.drive_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-900/50 text-blue-200 border border-blue-700 rounded-lg">
+                                    <ExternalLink className="w-3.5 h-3.5" /> Galeriyi Aç
+                                  </a>
+                                )}
+                              </div>
+                              <div className="flex gap-1">
+                                <button type="button" onClick={(e) => handleOpenEditModal(shoot, e)} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-indigo-300 bg-indigo-950/50 border border-indigo-800 rounded-lg">
+                                  <Edit className="w-3.5 h-3.5" /> Düzenle
+                                </button>
+                                <button type="button" onClick={(e) => handleDelete(shoot.id, e)} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-red-300 bg-red-950/50 border border-red-800 rounded-lg">
+                                  <Trash2 className="w-3.5 h-3.5" /> Sil
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-12 text-center text-slate-400">Select a client to view details.</div>
-            )}
+                ) : (
+                  <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-12 text-center text-slate-400">
+                    Detayları görmek için bir müşteri seç.
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       )}
     </main>
 
