@@ -325,11 +325,22 @@ export default function App() {
     setIsShootModalOpen(true);
   };
 
-  const filteredShoots = shoots.filter(s => {
-    const matchesSearch = (s.client_name && s.client_name.toLowerCase().includes(searchTerm.toLowerCase())) || (s.location && s.location.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredShoots = shoots
+    .filter(s => {
+      const matchesSearch = (s.client_name && s.client_name.toLowerCase().includes(searchTerm.toLowerCase())) || (s.location && s.location.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      // Planlananlar (planned) veya aktif çekimler her zaman en üstte olsun, tamamlananlar aşağıda kalsın
+      if (a.status === 'planned' && b.status !== 'planned') return -1;
+      if (a.status !== 'planned' && b.status === 'planned') return 1;
+
+      // Aynı statüdeyse tarihe göre en yakından en uzağa sırala
+      const dateA = a.date ? new Date(`${a.date}T${a.time || '00:00'}`).getTime() : 0;
+      const dateB = b.date ? new Date(`${b.date}T${b.time || '00:00'}`).getTime() : 0;
+      return dateA - dateB;
+    });
 
   const filteredClients = clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || (c.phone && c.phone.includes(searchTerm)));
 
