@@ -26,7 +26,9 @@ import {
   Link as LinkIcon,
   LogOut,
   AlertCircle,
-  ShieldCheck
+  ShieldCheck,
+  RefreshCw,
+  Download
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 
@@ -56,6 +58,10 @@ interface Shoot {
 }
 
 export default function App() {
+  const CURRENT_VERSION = "1.0.0"; // Mobil uygulama mevcut sürümü
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateMsg, setUpdateMsg] = useState("");
+
   const [session, setSession] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isRegistering, setIsRegistering] = useState(false);
@@ -99,6 +105,19 @@ export default function App() {
     notes: '',
     drive_link: ''
   });
+
+  // Sürüm ve Güncelleme Kontrolü
+  useEffect(() => {
+    fetch('/version.json')
+      .then(res => res.json())
+      .then(data => {
+        if (data.version && data.version !== CURRENT_VERSION) {
+          setUpdateAvailable(true);
+          setUpdateMsg(data.updateMessage || "New update available!");
+        }
+      })
+      .catch(err => console.log('Version check skipped', err));
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -423,7 +442,23 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
+    <div className="min-h-screen bg-slate-900 text-slate-100 relative">
+      {/* GÜNCELLEME UYARI BARI (Mobil ve Web Uyumlu) */}
+      {updateAvailable && (
+        <div className="bg-indigo-600 text-white px-4 py-3 text-xs flex flex-col sm:flex-row items-center justify-between gap-2 shadow-lg sticky top-0 z-50">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+            <span className="font-medium">{updateMsg}</span>
+          </div>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-3 py-1.5 bg-white text-indigo-700 font-bold rounded-lg shadow hover:bg-indigo-50 transition flex items-center gap-1 shrink-0"
+          >
+            <Download className="w-3.5 h-3.5" /> Güncelle & Yenile
+          </button>
+        </div>
+      )}
+
       <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap gap-3 justify-between items-center">
           <div className="flex items-center space-x-3">
