@@ -19,9 +19,16 @@ import {
   History,
   UserPlus,
   ExternalLink,
+  LogOut,
+  AlertCircle,
+  ShieldCheck,
+  RefreshCw,
+  Download,
   FileText,
+  Home,
   Receipt
 } from 'lucide-react';
+import { supabase } from './lib/supabase';
 import ReportsPage from './components/ReportsPage';
 
 interface Client {
@@ -31,6 +38,8 @@ interface Client {
   email: string;
   address?: string;
   notes?: string;
+  avatar_url?: string;
+  created_at?: string;
 }
 
 interface ExpenseItem {
@@ -58,46 +67,30 @@ interface Shoot {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'shoots' | 'clients' | 'reports'>('shoots');
+  const CURRENT_VERSION = "1.1.0";
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateMsg, setUpdateMsg] = useState("");
+
+  const [session, setSession] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [isApproved, setIsApproved] = useState<boolean | null>(true);
   
-  // ÖNCEKİ TÜM KAYITLARINI ASLA KAYBETMEDEN OKUYAN AKILLI YÜKLEYİCİ
-  const [shoots, setShoots] = useState<Shoot[]>(() => {
-    try {
-      const s1 = localStorage.getItem('shootflow_shoots');
-      const s2 = localStorage.getItem('shoots');
-      const parsed = s1 ? JSON.parse(s1) : (s2 ? JSON.parse(s2) : []);
-      return parsed;
-    } catch (e) {
-      return [];
-    }
-  });
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
 
-  const [clients, setClients] = useState<Client[]>(() => {
-    try {
-      const c1 = localStorage.getItem('shootflow_clients');
-      const c2 = localStorage.getItem('clients');
-      const parsed = c1 ? JSON.parse(c1) : (c2 ? JSON.parse(c2) : []);
-      return parsed;
-    } catch (e) {
-      return [];
-    }
-  });
-
-  // HER DEĞİŞİKLİKTE İKİ YERE BİRDEN OTOMATİK YEDEKLEME
-  useEffect(() => {
-    localStorage.setItem('shootflow_shoots', JSON.stringify(shoots));
-    localStorage.setItem('shoots', JSON.stringify(shoots));
-  }, [shoots]);
-
-  useEffect(() => {
-    localStorage.setItem('shootflow_clients', JSON.stringify(clients));
-    localStorage.setItem('clients', JSON.stringify(clients));
-  }, [clients]);
+  const [activeTab, setActiveTab] = useState<'shoots' | 'clients' | 'reports'>('shoots');
+  const [shoots, setShoots] = useState<Shoot[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+
   const [expandedShootId, setExpandedShootId] = useState<string | null>(null);
-  const [selectedClientForDetail, setSelectedClientForDetail] = useState<Client | null>(clients[0] || null);
+  const [selectedClientForDetail, setSelectedClientForDetail] = useState<Client | null>(null);
 
   const [isShootModalOpen, setIsShootModalOpen] = useState(false);
   const [editingShootId, setEditingShootId] = useState<string | null>(null);
@@ -105,25 +98,92 @@ export default function App() {
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
 
   const [clientFormData, setClientFormData] = useState({ name: '', phone: '', email: '', address: '', notes: '' });
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
   const [expenseItems, setExpenseItems] = useState<ExpenseItem[]>([]);
 
   const [formData, setFormData] = useState({
     client_name: '',
     client_phone: '',
     client_email: '',
+    avatar_url: '',
     shoot_type: 'Portrait / Concept',
     location: '',
     date: '',
     time: '',
     price: '',
-    expense: '',
     notes: '',
     drive_link: ''
   });
 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      setSession(currentSession);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  async function loadData() {
+    try {
+      setLoading(true);
+      const { data: shootsData, error: shootsError } = await supabase.from('shoots').select('*').order('date', { ascending: true });
+      const { data: clientsData, error: clientsError } = await supabase.from('clients').select('*').order('name', { ascending: true });
+
+      if (shootsError) console.error('Shoots load error:', shootsError);
+      if (clientsError) console.error('Clients load error:', clientsError);
+
+      setShoots(shootsData || []);
+      setClients(clientsData || []);
+      if (clientsData && clientsData.length > 0 && !selectedClientForDetail) {
+        setSelectedClientForDetail(clientsData[0]);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthMessage('');
+
+    try {
+      if (isRegistering) {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        setAuthMessage('Kayıt başarılı! Giriş yapabilirsiniz.');
+        setIsRegistering(false);
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      }
+    } catch (error: any) {
+      setAuthError(error.message || 'Giriş başarısız.');
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+  };
+
   const toggleExpand = (id: string) => { setExpandedShootId(expandedShootId === id ? null : id); };
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => { setFormData({ ...formData, [e.target.name]: e.target.value }); };
   const handleClientInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { setClientFormData({ ...clientFormData, [e.target.name]: e.target.value }); };
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) setAvatarFile(e.target.files[0]); };
 
   const addExpenseItem = () => {
     setExpenseItems([...expenseItems, { id: Math.random().toString(36).substring(2, 9), title: '', amount: '' }]);
@@ -137,130 +197,180 @@ export default function App() {
     setExpenseItems(expenseItems.filter(item => item.id !== id));
   };
 
+  const uploadAvatar = async (file: File): Promise<string | null> => {
+    try {
+      setUploadingAvatar(true);
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage.from('client-avatars').upload(fileName, file);
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from('client-avatars').getPublicUrl(fileName);
+      return data.publicUrl;
+    } catch (error) {
+      return null;
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const handleClientSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     setSelectedClientId(val);
+    setAvatarFile(null);
     if (val === 'new') {
-      setFormData(prev => ({ ...prev, client_name: '', client_phone: '', client_email: '' }));
+      setFormData(prev => ({ ...prev, client_name: '', client_phone: '', client_email: '', avatar_url: '' }));
     } else {
       const selected = clients.find(c => c.id === val);
       if (selected) {
-        setFormData(prev => ({ ...prev, client_name: selected.name, client_phone: selected.phone || '', client_email: selected.email || '' }));
+        setFormData(prev => ({ ...prev, client_name: selected.name, client_phone: selected.phone || '', client_email: selected.email || '', avatar_url: selected.avatar_url || '' }));
       }
     }
   };
 
   const resetForm = () => {
     setSelectedClientId('new');
+    setAvatarFile(null);
     setExpenseItems([]);
-    setFormData({ client_name: '', client_phone: '', client_email: '', shoot_type: 'Portrait / Concept', location: '', date: '', time: '', price: '', expense: '', notes: '', drive_link: '' });
+    setFormData({ client_name: '', client_phone: '', client_email: '', avatar_url: '', shoot_type: 'Portrait / Concept', location: '', date: '', time: '', price: '', notes: '', drive_link: '' });
     setEditingShootId(null);
   };
 
-  const handleClientSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newClient: Client = {
-      id: 'c_' + Date.now(),
-      name: clientFormData.name,
-      phone: clientFormData.phone,
-      email: clientFormData.email,
-      address: clientFormData.address,
-      notes: clientFormData.notes
-    };
-    const updatedClients = [...clients, newClient];
-    setClients(updatedClients);
-    setSelectedClientForDetail(newClient);
-    setIsClientModalOpen(false);
-    setClientFormData({ name: '', phone: '', email: '', address: '', notes: '' });
-  };
-
-  const handleShootSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    let finalClientId = selectedClientId !== 'new' ? selectedClientId : undefined;
-    
-    let updatedClients = [...clients];
-    if (selectedClientId === 'new' && formData.client_name) {
-      const newClient: Client = {
-        id: 'c_' + Date.now(),
-        name: formData.client_name,
-        phone: formData.client_phone,
-        email: formData.client_email
-      };
-      updatedClients.push(newClient);
-      setClients(updatedClients);
-      finalClientId = newClient.id;
-    }
-
-    const totalExpenseCalculated = expenseItems.reduce((acc, item) => acc + (parseFloat(item.amount) || 0), 0);
-    const finalExpense = totalExpenseCalculated > 0 ? totalExpenseCalculated : (parseFloat(formData.expense) || 0);
-
-    const shootPayload: Shoot = {
-      id: editingShootId || 's_' + Date.now(),
-      client_id: finalClientId,
-      client_name: formData.client_name,
-      client_phone: formData.client_phone,
-      client_email: formData.client_email,
-      shoot_type: formData.shoot_type,
-      location: formData.location,
-      date: formData.date,
-      time: formData.time,
-      price: parseFloat(formData.price) || 0,
-      expense: finalExpense,
-      expense_items: expenseItems,
-      status: 'planned',
-      notes: formData.notes,
-      drive_link: formData.drive_link
-    };
-
-    let updatedShoots = [];
-    if (editingShootId) {
-      updatedShoots = shoots.map(s => s.id === editingShootId ? { ...s, ...shootPayload } : s);
-    } else {
-      updatedShoots = [shootPayload, ...shoots];
-    }
-    
-    setShoots(updatedShoots);
-    setIsShootModalOpen(false);
+  const handleOpenAddShootModal = () => {
     resetForm();
+    setIsShootModalOpen(true);
   };
 
-  const handleStatusChange = (id: string, newStatus: 'planned' | 'completed' | 'cancelled', e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShoots(shoots.map(s => s.id === id ? { ...s, status: newStatus } : s));
+  const handleOpenAddClientModal = () => {
+    setAvatarFile(null);
+    setClientFormData({ name: '', phone: '', email: '', address: '', notes: '' });
+    setIsClientModalOpen(true);
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleClientSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      let avatarUrl = '';
+      if (avatarFile) {
+        const uploadedUrl = await uploadAvatar(avatarFile);
+        if (uploadedUrl) avatarUrl = uploadedUrl;
+      }
+      const { data: newClient, error } = await supabase.from('clients').insert([{ 
+        user_id: session?.user?.id || 'local', 
+        name: clientFormData.name, 
+        phone: clientFormData.phone, 
+        email: clientFormData.email, 
+        address: clientFormData.address, 
+        notes: clientFormData.notes, 
+        avatar_url: avatarUrl 
+      }]).select();
+      
+      if (error) throw error;
+      if (newClient && newClient[0]) {
+        setClients(prev => [...prev, newClient[0]]);
+        setSelectedClientForDetail(newClient[0]);
+      }
+      setIsClientModalOpen(false);
+      loadData();
+    } catch (error) { alert('Müşteri eklenemedi.'); }
+  };
+
+  const handleShootSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      let avatarUrl = formData.avatar_url;
+      if (avatarFile) {
+        const uploadedUrl = await uploadAvatar(avatarFile);
+        if (uploadedUrl) avatarUrl = uploadedUrl;
+      }
+      let finalClientId = selectedClientId !== 'new' ? selectedClientId : undefined;
+      if (selectedClientId === 'new' && formData.client_name) {
+        const { data: newClient } = await supabase.from('clients').insert([{ user_id: session?.user?.id || 'local', name: formData.client_name, phone: formData.client_phone, email: formData.client_email, avatar_url: avatarUrl }]).select();
+        if (newClient && newClient[0]) {
+          finalClientId = newClient[0].id;
+          setClients(prev => [...prev, newClient[0]]);
+        }
+      }
+
+      const totalExpenseCalculated = expenseItems.reduce((acc, item) => acc + (parseFloat(item.amount) || 0), 0);
+
+      const shootPayload = { 
+        user_id: session?.user?.id || 'local', 
+        client_id: finalClientId, 
+        client_name: formData.client_name, 
+        client_phone: formData.client_phone, 
+        client_email: formData.client_email, 
+        shoot_type: formData.shoot_type, 
+        location: formData.location, 
+        date: formData.date, 
+        time: formData.time, 
+        price: parseFloat(formData.price) || 0, 
+        expense: totalExpenseCalculated,
+        expense_items: expenseItems,
+        notes: formData.notes, 
+        drive_link: formData.drive_link 
+      };
+
+      if (editingShootId) {
+        await supabase.from('shoots').update(shootPayload).eq('id', editingShootId);
+      } else {
+        await supabase.from('shoots').insert([{ ...shootPayload, status: 'planned' }]);
+      }
+      setIsShootModalOpen(false);
+      resetForm();
+      loadData();
+    } catch (error) { alert('İşlem başarısız.'); }
+  };
+
+  const handleStatusChange = async (id: string, newStatus: 'planned' | 'completed' | 'cancelled', e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Bu çekimi silmek istediğine emin misin?')) return;
-    setShoots(shoots.filter(s => s.id !== id));
+    await supabase.from('shoots').update({ status: newStatus }).eq('id', id);
+    loadData();
+  };
+
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Silmek istediğinize emin misiniz?')) return;
+    await supabase.from('shoots').delete().eq('id', id);
+    loadData();
   };
 
   const handleOpenEditModal = (shoot: Shoot, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingShootId(shoot.id);
     setSelectedClientId(shoot.client_id || 'new');
+    setAvatarFile(null);
     setExpenseItems(shoot.expense_items || []);
-    setFormData({
-      client_name: shoot.client_name || '',
-      client_phone: shoot.client_phone || '',
-      client_email: shoot.client_email || '',
-      shoot_type: shoot.shoot_type || 'Portrait / Concept',
-      location: shoot.location || '',
-      date: shoot.date || '',
-      time: shoot.time || '',
-      price: shoot.price ? shoot.price.toString() : '',
-      expense: shoot.expense ? shoot.expense.toString() : '',
-      notes: shoot.notes || '',
-      drive_link: shoot.drive_link || ''
+    const client = clients.find(c => c.id === shoot.client_id);
+    setFormData({ 
+      client_name: shoot.client_name || '', 
+      client_phone: shoot.client_phone || '', 
+      client_email: shoot.client_email || '', 
+      avatar_url: client?.avatar_url || '', 
+      shoot_type: shoot.shoot_type || 'Portrait / Concept', 
+      location: shoot.location || '', 
+      date: shoot.date || '', 
+      time: shoot.time || '', 
+      price: shoot.price ? shoot.price.toString() : '', 
+      notes: shoot.notes || '', 
+      drive_link: shoot.drive_link || '' 
     });
     setIsShootModalOpen(true);
   };
 
-  const filteredShoots = shoots.filter(s => {
-    const matchesSearch = (s.client_name && s.client_name.toLowerCase().includes(searchTerm.toLowerCase())) || (s.location && s.location.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredShoots = shoots
+    .filter(s => {
+      const matchesSearch = (s.client_name && s.client_name.toLowerCase().includes(searchTerm.toLowerCase())) || (s.location && s.location.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (a.status === 'planned' && b.status !== 'planned') return -1;
+      if (a.status !== 'planned' && b.status === 'planned') return 1;
+
+      const dateA = a.date ? new Date(`${a.date}T${a.time || '00:00'}`).getTime() : 0;
+      const dateB = b.date ? new Date(`${b.date}T${b.time || '00:00'}`).getTime() : 0;
+      return dateA - dateB;
+    });
 
   const filteredClients = clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || (c.phone && c.phone.includes(searchTerm)));
 
@@ -290,9 +400,11 @@ export default function App() {
             <button onClick={() => setActiveTab('reports')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'reports' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Reports</button>
           </div>
 
-          <button onClick={() => { resetForm(); setIsShootModalOpen(true); }} className="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg font-medium text-xs shadow">
-            <Plus className="w-4 h-4" /><span>New Shoot</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={handleOpenAddShootModal} className="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg font-medium text-xs shadow">
+              <Plus className="w-4 h-4" /><span>New Shoot</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -308,13 +420,15 @@ export default function App() {
                 <option value="cancelled">İptal</option>
               </select>
             ) : (
-              <button onClick={() => setIsClientModalOpen(true)} className="bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-medium">Yeni Müşteri Ekle</button>
+              <button onClick={handleOpenAddClientModal} className="bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-medium">Yeni Müşteri Ekle</button>
             )}
           </div>
         )}
 
         {activeTab === 'shoots' && (
-          filteredShoots.length === 0 ? (
+          loading ? (
+            <div className="text-center py-12 text-slate-400">Yükleniyor...</div>
+          ) : filteredShoots.length === 0 ? (
             <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-12 text-center text-slate-400">Kayıt Bulunamadı</div>
           ) : (
             <div className="space-y-2">
@@ -404,7 +518,6 @@ export default function App() {
         {activeTab === 'reports' && <ReportsPage shoots={shoots} />}
       </main>
 
-      {/* Yeni Çekim Modal */}
       {isShootModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
           <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-lg w-full p-6 space-y-3 text-xs max-h-[90vh] overflow-y-auto">
@@ -423,7 +536,6 @@ export default function App() {
               <input type="text" name="location" placeholder="Lokasyon" value={formData.location} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
               <input type="number" name="price" placeholder="Brüt Tutar (₺)" value={formData.price} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-slate-100" />
 
-              {/* Dinamik Masraf Kalemleri Ekleme Bölümü */}
               <div className="bg-slate-900/60 border border-slate-700 p-3 rounded-lg space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="font-semibold text-slate-300 flex items-center gap-1.5">
@@ -460,7 +572,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Yeni Müşteri Modal */}
       {isClientModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
           <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-sm w-full p-6 space-y-3 text-xs">
