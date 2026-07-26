@@ -21,7 +21,7 @@ import {
   ChevronUp,
   Users,
   History,
-  Upload,
+  UserPlus,
   Image as ImageIcon
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
@@ -64,10 +64,19 @@ export default function App() {
   const [expandedShootId, setExpandedShootId] = useState<string | null>(null);
   const [selectedClientForDetail, setSelectedClientForDetail] = useState<Client | null>(null);
 
-  // Modal Durumları
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Çekim Modalı State
+  const [isShootModalOpen, setIsShootModalOpen] = useState(false);
   const [editingShootId, setEditingShootId] = useState<string | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string>('new');
+
+  // Sadece Müşteri Ekleme Modalı State
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [clientFormData, setClientFormData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    avatar_url: ''
+  });
 
   // Resim Yükleme State
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -111,6 +120,10 @@ export default function App() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleClientInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setClientFormData({ ...clientFormData, [e.target.name]: e.target.value });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -184,40 +197,56 @@ export default function App() {
     setEditingShootId(null);
   };
 
-  const handleOpenAddModal = () => {
+  const handleOpenAddShootModal = () => {
     resetForm();
-    setIsModalOpen(true);
+    setIsShootModalOpen(true);
   };
 
-  const handleOpenEditModal = (shoot: Shoot, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditingShootId(shoot.id);
-    setSelectedClientId(shoot.client_id || 'new');
+  const handleOpenAddClientModal = () => {
     setAvatarFile(null);
-
-    const client = clients.find(c => c.id === shoot.client_id);
-
-    setFormData({
-      client_name: shoot.client_name || '',
-      client_phone: shoot.client_phone || '',
-      client_email: shoot.client_email || '',
-      avatar_url: client?.avatar_url || '',
-      shoot_type: shoot.shoot_type || 'Portre / Konsept',
-      location: shoot.location || '',
-      date: shoot.date || '',
-      time: shoot.time || '',
-      price: shoot.price ? shoot.price.toString() : '',
-      notes: shoot.notes || ''
-    });
-    setIsModalOpen(true);
+    setClientFormData({ name: '', phone: '', email: '', avatar_url: '' });
+    setIsClientModalOpen(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Doğrudan Müşteri Kaydetme
+  const handleClientSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      let avatarUrl = '';
+      if (avatarFile) {
+        const uploadedUrl = await uploadAvatar(avatarFile);
+        if (uploadedUrl) avatarUrl = uploadedUrl;
+      }
+
+      const { data: newClient, error } = await supabase
+        .from('clients')
+        .insert([{
+          name: clientFormData.name,
+          phone: clientFormData.phone,
+          email: clientFormData.email,
+          avatar_url: avatarUrl
+        }])
+        .select();
+
+      if (error) throw error;
+
+      if (newClient && newClient[0]) {
+        setClients(prev => [...prev, newClient[0]]);
+        setSelectedClientForDetail(newClient[0]);
+      }
+
+      setIsClientModalOpen(false);
+    } catch (error) {
+      console.error('Müşteri ekleme hatası:', error);
+      alert('Müşteri eklenirken hata oluştu.');
+    }
+  };
+
+  const handleShootSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       let avatarUrl = formData.avatar_url;
 
-      // Eğer yeni resim seçilmişse yükle
       if (avatarFile) {
         const uploadedUrl = await uploadAvatar(avatarFile);
         if (uploadedUrl) avatarUrl = uploadedUrl;
@@ -225,7 +254,6 @@ export default function App() {
 
       let finalClientId = selectedClientId !== 'new' ? selectedClientId : undefined;
 
-      // Yeni müşteri kaydı
       if (selectedClientId === 'new' && formData.client_name) {
         const { data: newClient } = await supabase
           .from('clients')
@@ -242,7 +270,6 @@ export default function App() {
           setClients(prev => [...prev, newClient[0]]);
         }
       } else if (finalClientId && avatarUrl !== formData.avatar_url) {
-        // Var olan müşterinin resmini güncelle
         await supabase.from('clients').update({ avatar_url: avatarUrl }).eq('id', finalClientId);
         setClients(clients.map(c => c.id === finalClientId ? { ...c, avatar_url: avatarUrl } : c));
       }
@@ -263,7 +290,7 @@ export default function App() {
         if (data) setShoots([...shoots, data[0]]);
       }
 
-      setIsModalOpen(false);
+      setIsShootModalOpen(false);
       resetForm();
     } catch (error) {
       console.error('Kayıt hatası:', error);
@@ -292,6 +319,29 @@ export default function App() {
     } catch (error) {
       console.error('Silme hatası:', error);
     }
+  };
+
+  const handleOpenEditModal = (shoot: Shoot, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingShootId(shoot.id);
+    setSelectedClientId(shoot.client_id || 'new');
+    setAvatarFile(null);
+
+    const client = clients.find(c => c.id === shoot.client_id);
+
+    setFormData({
+      client_name: shoot.client_name || '',
+      client_phone: shoot.client_phone || '',
+      client_email: shoot.client_email || '',
+      avatar_url: client?.avatar_url || '',
+      shoot_type: shoot.shoot_type || 'Portre / Konsept',
+      location: shoot.location || '',
+      date: shoot.date || '',
+      time: shoot.time || '',
+      price: shoot.price ? shoot.price.toString() : '',
+      notes: shoot.notes || ''
+    });
+    setIsShootModalOpen(true);
   };
 
   const filteredShoots = shoots
@@ -360,7 +410,7 @@ export default function App() {
           </div>
 
           <button
-            onClick={handleOpenAddModal}
+            onClick={handleOpenAddShootModal}
             className="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-1.5 rounded-lg font-medium transition text-xs shadow-md shadow-indigo-600/30"
           >
             <Plus className="w-4 h-4" />
@@ -372,7 +422,7 @@ export default function App() {
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         
-        {/* Arama Barı */}
+        {/* Arama Barı & Müşteri Ekle Butonu */}
         <div className="flex flex-col md:flex-row gap-3 mb-6 justify-between items-center">
           <div className="relative w-full md:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -385,7 +435,7 @@ export default function App() {
             />
           </div>
 
-          {activeTab === 'shoots' && (
+          {activeTab === 'shoots' ? (
             <div className="flex items-center space-x-2 w-full md:w-auto">
               <Filter className="w-4 h-4 text-slate-400" />
               <select
@@ -399,6 +449,14 @@ export default function App() {
                 <option value="cancelled">İptal Edilenler</option>
               </select>
             </div>
+          ) : (
+            <button
+              onClick={handleOpenAddClientModal}
+              className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-lg font-medium transition text-xs shadow-md shadow-emerald-600/30 w-full md:w-auto justify-center"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Yeni Müşteri Ekle</span>
+            </button>
           )}
         </div>
 
@@ -541,7 +599,10 @@ export default function App() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Müşteri Listesi */}
             <div className="md:col-span-1 space-y-2">
-              <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Müşteriler ({filteredClients.length})</h2>
+              <div className="flex justify-between items-center mb-2">
+                <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Müşteriler ({filteredClients.length})</h2>
+              </div>
+
               {filteredClients.length === 0 ? (
                 <p className="text-xs text-slate-500 italic p-4 bg-slate-800/40 rounded-lg">Müşteri bulunamadı.</p>
               ) : (
@@ -652,8 +713,84 @@ export default function App() {
         )}
       </main>
 
-      {/* Modal - Ekle / Düzenle */}
-      {isModalOpen && (
+      {/* MODAL 1: Sadece Müşteri Ekleme Modalı */}
+      {isClientModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-emerald-400" />
+                Yeni Müşteri Profili Oluştur
+              </h2>
+              <button onClick={() => setIsClientModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            <form onSubmit={handleClientSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-medium text-slate-300 mb-1">Müşteri Profil Fotoğrafı</label>
+                <div className="flex items-center gap-3 bg-slate-900 p-2.5 rounded-lg border border-slate-700">
+                  <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-slate-500 shrink-0">
+                    <ImageIcon className="w-5 h-5" />
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-300 mb-1">Müşteri Adı Soyadı *</label>
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  value={clientFormData.name}
+                  onChange={handleClientInputChange}
+                  placeholder="Örn: Zehra Güneş"
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-300 mb-1">Telefon</label>
+                <input
+                  type="text"
+                  name="phone"
+                  value={clientFormData.phone}
+                  onChange={handleClientInputChange}
+                  placeholder="05XX XXX XX XX"
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-300 mb-1">E-posta</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={clientFormData.email}
+                  onChange={handleClientInputChange}
+                  placeholder="ornek@mail.com"
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="flex space-x-2 pt-3">
+                <button type="button" onClick={() => setIsClientModalOpen(false)} className="w-1/2 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-lg transition">İptal</button>
+                <button type="submit" disabled={uploadingAvatar} className="w-1/2 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg transition">
+                  {uploadingAvatar ? 'Resim Yükleniyor...' : 'Müşteriyi Kaydet'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: Çekim Ekleme / Düzenleme Modalı */}
+      {isShootModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-5">
@@ -661,10 +798,10 @@ export default function App() {
                 <Camera className="w-4 h-4 text-indigo-400" />
                 {editingShootId ? 'Çekim Düzenle' : 'Yeni Çekim Ekle'}
               </h2>
-              <button onClick={() => { setIsModalOpen(false); resetForm(); }} className="text-slate-400 hover:text-white">✕</button>
+              <button onClick={() => { setIsShootModalOpen(false); resetForm(); }} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+            <form onSubmit={handleShootSubmit} className="space-y-3 text-xs">
               <div>
                 <label className="block font-medium text-slate-300 mb-1">Müşteri Profili Seçin</label>
                 <select
@@ -679,7 +816,6 @@ export default function App() {
                 </select>
               </div>
 
-              {/* Müşteri Profil Fotoğrafı Yükleme */}
               <div>
                 <label className="block font-medium text-slate-300 mb-1">Müşteri Profil Fotoğrafı</label>
                 <div className="flex items-center gap-3 bg-slate-900 p-2.5 rounded-lg border border-slate-700">
@@ -812,7 +948,7 @@ export default function App() {
               </div>
 
               <div className="flex space-x-2 pt-2">
-                <button type="button" onClick={() => { setIsModalOpen(false); resetForm(); }} className="w-1/2 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-lg transition">İptal</button>
+                <button type="button" onClick={() => { setIsShootModalOpen(false); resetForm(); }} className="w-1/2 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-lg transition">İptal</button>
                 <button type="submit" disabled={uploadingAvatar} className="w-1/2 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition">
                   {uploadingAvatar ? 'Resim Yükleniyor...' : editingShootId ? 'Güncelle' : 'Kaydet'}
                 </button>
