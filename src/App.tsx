@@ -327,7 +327,7 @@ export default function App() {
     }
   };
 
-  // Rapor Verileri Hesaplama
+  // Rapor Verileri
   const activeShoots = shoots.filter(s => s.status !== 'cancelled');
   const totalGross = activeShoots.reduce((acc, s) => acc + (Number(s.price) || 0), 0);
   const totalExpense = activeShoots.reduce((acc, s) => acc + (Number(s.expense) || 0), 0);
@@ -503,32 +503,35 @@ export default function App() {
           </>
         )}
 
+        {/* DETAYLI MÜŞTERİ PORTFÖYÜ EKRANI */}
         {activeTab === 'clients' && (
-          <>
-            <div className="flex justify-between items-center mb-6">
-              <div className="relative w-full md:w-80">
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
+              <div className="relative w-full sm:w-80">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input type="text" placeholder="Search client..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm" />
               </div>
-              <button onClick={handleOpenAddClientModal} className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-lg font-medium transition text-xs shadow">
-                <UserPlus className="w-4 h-4" /><span>Add New Client</span>
+              <button onClick={handleOpenAddClientModal} className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-medium transition text-xs shadow w-full sm:w-auto justify-center">
+                <UserPlus className="w-4 h-4" /><span>Yeni Müşteri Ekle</span>
               </button>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="md:col-span-1 space-y-2">
-                <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Clients ({filteredClients.length})</h2>
+              <div className="md:col-span-1 space-y-2 max-h-[70vh] overflow-y-auto pr-1">
+                <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Müşteriler ({filteredClients.length})</h2>
                 {filteredClients.map(client => (
-                  <div key={client.id} onClick={() => setSelectedClientForDetail(client)} className={`p-3 rounded-xl border cursor-pointer transition flex justify-between items-center ${selectedClientForDetail?.id === client.id ? 'bg-indigo-950/60 border-indigo-500' : 'bg-slate-800 border-slate-700'}`}>
+                  <div key={client.id} onClick={() => setSelectedClientForDetail(client)} className={`p-3.5 rounded-xl border cursor-pointer transition flex justify-between items-center ${selectedClientForDetail?.id === client.id ? 'bg-indigo-950/60 border-indigo-500 shadow-md' : 'bg-slate-800 border-slate-700 hover:border-slate-600'}`}>
                     <div className="flex items-center space-x-3">
-                      {client.avatar_url ? <img src={client.avatar_url} alt={client.name} className="w-10 h-10 rounded-lg object-cover" /> : <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center text-indigo-400"><User className="w-5 h-5" /></div>}
-                      <div><h3 className="font-semibold text-slate-100 text-sm">{client.name}</h3><p className="text-xs text-slate-400">{client.phone || 'No phone'}</p></div>
+                      {client.avatar_url ? <img src={client.avatar_url} alt={client.name} className="w-10 h-10 rounded-lg object-cover border border-slate-700" /> : <div className="w-10 h-10 rounded-lg bg-slate-700/80 flex items-center justify-center text-indigo-400"><User className="w-5 h-5" /></div>}
+                      <div><h3 className="font-semibold text-slate-100 text-sm">{client.name}</h3><p className="text-xs text-slate-400">{client.phone || 'Telefon yok'}</p></div>
                     </div>
                   </div>
                 ))}
               </div>
+
               <div className="md:col-span-2">
                 {selectedClientForDetail ? (
-                  <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-5">
+                  <div className="bg-slate-800 border border-slate-700/80 rounded-2xl p-6 space-y-6 shadow-sm">
                     <div className="flex items-center space-x-4 border-b border-slate-700 pb-4">
                       {selectedClientForDetail.avatar_url ? (
                         <img src={selectedClientForDetail.avatar_url} alt={selectedClientForDetail.name} className="w-16 h-16 rounded-xl object-cover border border-indigo-500/50" />
@@ -539,40 +542,88 @@ export default function App() {
                       )}
                       <div>
                         <h2 className="text-xl font-bold text-slate-100">{selectedClientForDetail.name}</h2>
-                        <p className="text-xs text-indigo-400 font-medium">Client Archive & Detail Card</p>
+                        <p className="text-xs text-indigo-400 font-medium">Müşteri Detay Kartı ve Geçmiş Arşivi</p>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                      <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1">
-                        <span className="text-slate-400 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-indigo-400" /> Phone</span>
-                        <p className="font-semibold text-slate-200">{selectedClientForDetail.phone || 'Not specified'}</p>
+                      <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/60 space-y-1">
+                        <span className="text-slate-400 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-indigo-400" /> Telefon</span>
+                        <p className="font-semibold text-slate-200">{selectedClientForDetail.phone || 'Belirtilmemiş'}</p>
                       </div>
-                      <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1">
-                        <span className="text-slate-400 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-indigo-400" /> Email</span>
-                        <p className="font-semibold text-slate-200 truncate">{selectedClientForDetail.email || 'Not specified'}</p>
+                      <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/60 space-y-1">
+                        <span className="text-slate-400 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-indigo-400" /> E-posta</span>
+                        <p className="font-semibold text-slate-200 truncate">{selectedClientForDetail.email || 'Belirtilmemiş'}</p>
                       </div>
                     </div>
 
-                    <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1 text-xs">
-                      <span className="text-slate-400 flex items-center gap-1.5"><Home className="w-3.5 h-3.5 text-indigo-400" /> Address</span>
-                      <p className="text-slate-200">{selectedClientForDetail.address || 'No address recorded.'}</p>
+                    <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/60 space-y-1 text-xs">
+                      <span className="text-slate-400 flex items-center gap-1.5"><Home className="w-3.5 h-3.5 text-indigo-400" /> Adres</span>
+                      <p className="text-slate-200">{selectedClientForDetail.address || 'Kayıtlı adres bulunmuyor.'}</p>
                     </div>
 
-                    <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-1 text-xs">
-                      <span className="text-slate-400 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-indigo-400" /> Client Notes</span>
-                      <p className="text-slate-300 italic">{selectedClientForDetail.notes || 'No client notes added.'}</p>
+                    <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/60 space-y-1 text-xs">
+                      <span className="text-slate-400 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-indigo-400" /> Müşteri Özel Notları</span>
+                      <p className="text-slate-300 italic">{selectedClientForDetail.notes || 'Özel not eklenmemiş.'}</p>
+                    </div>
+
+                    <div className="space-y-3 pt-2 border-t border-slate-700">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <History className="w-4 h-4 text-indigo-400" /> Geçmiş Çekimler & Kâr Arşivi
+                        </h3>
+                        {(() => {
+                          const clientShoots = shoots.filter(s => s.client_id === selectedClientForDetail.id || (s.client_name && s.client_name.toLowerCase() === selectedClientForDetail.name.toLowerCase()));
+                          const totalGross = clientShoots.reduce((acc, s) => acc + (Number(s.price) || 0), 0);
+                          const totalExpense = clientShoots.reduce((acc, s) => acc + (Number(s.expense) || 0), 0);
+                          const totalNet = totalGross - totalExpense;
+                          return (
+                            <div className="text-xs font-bold text-green-400 bg-green-950/60 border border-green-800/60 px-3 py-1 rounded-lg">
+                              Net Kâr: ₺{totalNet.toLocaleString()} <span className="text-[10px] text-slate-400 font-normal">(Brüt: ₺{totalGross.toLocaleString()})</span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                        {shoots.filter(s => s.client_id === selectedClientForDetail.id || (s.client_name && s.client_name.toLowerCase() === selectedClientForDetail.name.toLowerCase())).length === 0 ? (
+                          <p className="text-xs text-slate-500 italic bg-slate-900/40 p-4 rounded-xl text-center">Bu müşteriye ait geçmiş çekim kaydı bulunamadı.</p>
+                        ) : (
+                          shoots
+                            .filter(s => s.client_id === selectedClientForDetail.id || (s.client_name && s.client_name.toLowerCase() === selectedClientForDetail.name.toLowerCase()))
+                            .map(shoot => {
+                              const p = Number(shoot.price) || 0;
+                              const ex = Number(shoot.expense) || 0;
+                              const net = p - ex;
+                              return (
+                                <div key={shoot.id} className="bg-slate-900/80 border border-slate-700/60 rounded-xl p-3 flex items-center justify-between text-xs gap-2">
+                                  <div className="space-y-0.5">
+                                    <div className="font-semibold text-slate-200">{shoot.shoot_type}</div>
+                                    <div className="text-slate-400 flex items-center gap-2">
+                                      <span><Calendar className="w-3 h-3 inline mr-1 text-indigo-400" />{shoot.date || 'Tarih yok'}</span>
+                                      <span><MapPin className="w-3 h-3 inline mr-1 text-indigo-400" />{shoot.location || 'Konum yok'}</span>
+                                    </div>
+                                  </div>
+                                  <div className="text-right space-y-0.5 shrink-0">
+                                    <div className="font-bold text-green-400">Net: ₺{net.toLocaleString()}</div>
+                                    <div className="text-[10px] text-slate-400">Brüt: ₺{p} | Masraf: <span className="text-red-400">₺{ex}</span></div>
+                                    <div>{getStatusBadge(shoot.status)}</div>
+                                  </div>
+                                </div>
+                              );
+                            })
+                        )}
+                      </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-12 text-center text-slate-400">Select a client to view details.</div>
+                  <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-16 text-center text-slate-400">Detaylarını görmek için sol taraftan bir müşteri seçin.</div>
                 )}
               </div>
             </div>
-          </>
+          </div>
         )}
 
-        {/* İSTEDİĞİN GELİŞMİŞ FİNANSAL RAPOR VE MÜŞTERİ MATRİSİ */}
         {activeTab === 'reports' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -702,6 +753,153 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* Yeni Müşteri Modalı */}
+      {isClientModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-base font-bold text-slate-100 mb-4">Yeni Müşteri Ekle</h2>
+            <form onSubmit={handleClientSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 mb-1">Müşteri Fotoğrafı / Avatarı</label>
+                <input type="file" accept="image/*" onChange={handleFileChange} className="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer bg-slate-900 border border-slate-700 rounded-lg p-1" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Ad Soyad / Firma Adı *</label>
+                <input type="text" name="name" required placeholder="Ad Soyad veya Firma" value={clientFormData.name} onChange={handleClientInputChange} className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Telefon</label>
+                <input type="text" name="phone" placeholder="+90 (555) 000 00 00" value={clientFormData.phone} onChange={handleClientInputChange} className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">E-posta</label>
+                <input type="email" name="email" placeholder="ornek@domain.com" value={clientFormData.email} onChange={handleClientInputChange} className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Adres</label>
+                <input type="text" name="address" placeholder="Açık adres detayları" value={clientFormData.address} onChange={handleClientInputChange} className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Özel Notlar</label>
+                <textarea name="notes" placeholder="Müşteri hakkında özel notlar..." rows={3} value={clientFormData.notes} onChange={handleClientInputChange} className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 outline-none focus:border-indigo-500 resize-none" />
+              </div>
+              <div className="flex gap-2 pt-3">
+                <button type="button" onClick={() => setIsClientModalOpen(false)} className="w-1/2 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl text-slate-200 transition font-medium">İptal</button>
+                <button type="submit" disabled={uploadingAvatar} className="w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-white transition font-medium shadow-sm">{uploadingAvatar ? 'Yükleniyor...' : 'Kaydet'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Yeni Çekim Modalı */}
+      {isShootModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-base font-bold text-slate-100 mb-4">{editingShootId ? 'Çekimi Düzenle' : 'Yeni Çekim Ekle'}</h2>
+            <form onSubmit={handleShootSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 mb-1">Müşteri Seç</label>
+                <select value={selectedClientId} onChange={handleClientSelectChange} className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 outline-none focus:border-indigo-500">
+                  <option value="new">+ Yeni Müşteri</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Müşteri Adı *</label>
+                <input type="text" name="client_name" required placeholder="Müşteri Adı" value={formData.client_name} onChange={handleInputChange} className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Çekim Türü / Başlığı</label>
+                <input type="text" name="shoot_type" placeholder="Örn: Portre / Konsept / Voleybol Maçı" value={formData.shoot_type} onChange={handleInputChange} className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 outline-none focus:border-indigo-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-400 mb-1">Tarih *</label>
+                  <input type="date" name="date" required value={formData.date} onChange={handleInputChange} className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-slate-400 mb-1">Saat</label>
+                  <input type="time" name="time" value={formData.time} onChange={handleInputChange} className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 outline-none focus:border-indigo-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Konum</label>
+                <input type="text" name="location" placeholder="Stüdyo veya Salon konumu" value={formData.location} onChange={handleInputChange} className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Brüt Fiyat (₺)</label>
+                <input type="number" name="price" placeholder="0.00" value={formData.price} onChange={handleInputChange} className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 outline-none focus:border-indigo-500" />
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-700/80 p-3.5 rounded-xl space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                    <Receipt className="w-4 h-4 text-red-400" /> Masraf Kalemleri (İsteğe Bağlı)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={addExpenseItem}
+                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[11px] font-medium transition flex items-center gap-1 shadow-sm"
+                  >
+                    <Plus className="w-3 h-3" /> Kalem Ekle
+                  </button>
+                </div>
+
+                {expenseItems.length === 0 ? (
+                  <p className="text-[11px] text-slate-500 italic py-1">Yol, yemek, ekipman vb. masraflar ekleyebilirsiniz.</p>
+                ) : (
+                  <div className="space-y-2 pt-1">
+                    {expenseItems.map((item) => (
+                      <div key={item.id} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="Açıklama (Örn: Yol, Yemek)"
+                          value={item.title}
+                          onChange={(e) => updateExpenseItem(item.id, 'title', e.target.value)}
+                          className="flex-1 px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-100 outline-none"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Tutar (₺)"
+                          value={item.amount}
+                          onChange={(e) => updateExpenseItem(item.id, 'amount', e.target.value)}
+                          className="w-24 px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-100 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeExpenseItem(item.id)}
+                          className="p-1.5 bg-red-950/60 hover:bg-red-900 text-red-400 rounded-lg border border-red-800/40 transition"
+                          title="Kalemi Sil"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <div className="text-right text-[11px] font-bold text-red-400 pt-1 border-t border-slate-800">
+                      Toplam Masraf: ₺{expenseItems.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0)}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1">Drive / Galeri Linki</label>
+                <input type="url" name="drive_link" placeholder="https://..." value={formData.drive_link} onChange={handleInputChange} className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">Çekim Notları</label>
+                <textarea name="notes" placeholder="Bu çekim için özel notlar..." rows={2} value={formData.notes} onChange={handleInputChange} className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 outline-none focus:border-indigo-500 resize-none" />
+              </div>
+              <div className="flex gap-2 pt-3">
+                <button type="button" onClick={() => setIsShootModalOpen(false)} className="w-1/2 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl text-slate-200 transition font-medium">İptal</button>
+                <button type="submit" className="w-1/2 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white transition font-medium shadow-sm">Kaydet</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
