@@ -19,7 +19,8 @@ import {
   RotateCcw,
   ChevronDown,
   ChevronUp,
-  UserPlus
+  Users,
+  History
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 
@@ -28,6 +29,7 @@ interface Client {
   name: string;
   phone: string;
   email: string;
+  created_at?: string;
 }
 
 interface Shoot {
@@ -46,16 +48,22 @@ interface Shoot {
 }
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState<'shoots' | 'clients'>('shoots');
   const [shoots, setShoots] = useState<Shoot[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Arama & Filtreleme
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+
+  // Akordiyon & Detay Durumları
+  const [expandedShootId, setExpandedShootId] = useState<string | null>(null);
+  const [selectedClientForDetail, setSelectedClientForDetail] = useState<Client | null>(null);
+
+  // Modal Durumları
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingShootId, setEditingShootId] = useState<string | null>(null);
-  const [expandedShootId, setExpandedShootId] = useState<string | null>(null);
-
-  // Müşteri seçimi / Yeni müşteri modu
   const [selectedClientId, setSelectedClientId] = useState<string>('new');
 
   const [formData, setFormData] = useState({
@@ -77,18 +85,8 @@ export default function App() {
   async function loadData() {
     try {
       setLoading(true);
-      
-      // Çekimleri çek
-      const { data: shootsData } = await supabase
-        .from('shoots')
-        .select('*')
-        .order('date', { ascending: true });
-
-      // Müşterileri çek
-      const { data: clientsData } = await supabase
-        .from('clients')
-        .select('*')
-        .order('name', { ascending: true });
+      const { data: shootsData } = await supabase.from('shoots').select('*').order('date', { ascending: true });
+      const { data: clientsData } = await supabase.from('clients').select('*').order('name', { ascending: true });
 
       setShoots(shootsData || []);
       setClients(clientsData || []);
@@ -104,10 +102,7 @@ export default function App() {
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleClientSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -173,15 +168,10 @@ export default function App() {
     try {
       let finalClientId = selectedClientId !== 'new' ? selectedClientId : undefined;
 
-      // Eğer yeni müşteri girilmişse önce clients tablosuna kaydet
       if (selectedClientId === 'new' && formData.client_name) {
         const { data: newClient } = await supabase
           .from('clients')
-          .insert([{
-            name: formData.client_name,
-            phone: formData.client_phone,
-            email: formData.client_email
-          }])
+          .insert([{ name: formData.client_name, phone: formData.client_phone, email: formData.client_email }])
           .select();
 
         if (newClient && newClient[0]) {
@@ -197,19 +187,11 @@ export default function App() {
       };
 
       if (editingShootId) {
-        const { error } = await supabase
-          .from('shoots')
-          .update(shootPayload)
-          .eq('id', editingShootId);
-
+        const { error } = await supabase.from('shoots').update(shootPayload).eq('id', editingShootId);
         if (error) throw error;
         setShoots(shoots.map(s => s.id === editingShootId ? { ...s, ...shootPayload } : s));
       } else {
-        const { data, error } = await supabase
-          .from('shoots')
-          .insert([{ ...shootPayload, status: 'planned' }])
-          .select();
-
+        const { data, error } = await supabase.from('shoots').insert([{ ...shootPayload, status: 'planned' }]).select();
         if (error) throw error;
         if (data) setShoots([...shoots, data[0]]);
       }
@@ -225,11 +207,7 @@ export default function App() {
   const handleStatusChange = async (id: string, newStatus: 'planned' | 'completed' | 'cancelled', e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const { error } = await supabase
-        .from('shoots')
-        .update({ status: newStatus })
-        .eq('id', id);
-
+      const { error } = await supabase.from('shoots').update({ status: newStatus }).eq('id', id);
       if (error) throw error;
       setShoots(shoots.map(shoot => shoot.id === id ? { ...shoot, status: newStatus } : shoot));
     } catch (error) {
@@ -240,7 +218,6 @@ export default function App() {
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('Bu çekim kaydını silmek istediğinize emin misiniz?')) return;
-    
     try {
       const { error } = await supabase.from('shoots').delete().eq('id', id);
       if (error) throw error;
@@ -265,6 +242,11 @@ export default function App() {
       return dateA - dateB;
     });
 
+  const filteredClients = clients.filter(c => 
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (c.phone && c.phone.includes(searchTerm))
+  );
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
@@ -280,7 +262,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-900 text-slate-100">
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row gap-3 justify-between items-center">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-indigo-600 rounded-lg">
               <Camera className="w-6 h-6 text-white" />
@@ -289,12 +271,31 @@ export default function App() {
               <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
                 ShootFlow
               </h1>
-              <p className="text-xs text-slate-400">Çekim & Müşteri Takip Paneli</p>
+              <p className="text-xs text-slate-400">Çekim & Müşteri CRM</p>
             </div>
           </div>
+
+          {/* PANEL SEKMELERİ */}
+          <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-700">
+            <button
+              onClick={() => setActiveTab('shoots')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'shoots' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Çekim Takvimi</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('clients')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'clients' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Müşteri Portföyü</span>
+            </button>
+          </div>
+
           <button
             onClick={handleOpenAddModal}
-            className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-medium transition duration-200 shadow-lg shadow-indigo-600/30 text-sm"
+            className="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-1.5 rounded-lg font-medium transition text-xs shadow-md shadow-indigo-600/30"
           >
             <Plus className="w-4 h-4" />
             <span>Yeni Çekim</span>
@@ -303,190 +304,267 @@ export default function App() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Search & Filter */}
-        <div className="flex flex-col md:flex-row gap-4 mb-6 justify-between items-center">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        {/* Arama Barı */}
+        <div className="flex flex-col md:flex-row gap-3 mb-6 justify-between items-center">
           <div className="relative w-full md:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Çekim veya müşteri ara..."
+              placeholder={activeTab === 'shoots' ? "Çekim veya müşteri ara..." : "Müşteri adı veya telefon ara..."}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
             />
           </div>
 
-          <div className="flex items-center space-x-2 w-full md:w-auto">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2 w-full md:w-auto"
-            >
-              <option value="all">Tüm Durumlar</option>
-              <option value="planned">Planlananlar</option>
-              <option value="completed">Tamamlananlar</option>
-              <option value="cancelled">İptal Edilenler</option>
-            </select>
-          </div>
+          {activeTab === 'shoots' && (
+            <div className="flex items-center space-x-2 w-full md:w-auto">
+              <Filter className="w-4 h-4 text-slate-400" />
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2 w-full md:w-auto"
+              >
+                <option value="all">Tüm Durumlar</option>
+                <option value="planned">Planlananlar</option>
+                <option value="completed">Tamamlananlar</option>
+                <option value="cancelled">İptal Edilenler</option>
+              </select>
+            </div>
+          )}
         </div>
 
-        {/* Compact List */}
-        {loading ? (
-          <div className="flex justify-center items-center py-20">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500"></div>
-          </div>
-        ) : filteredShoots.length === 0 ? (
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-12 text-center">
-            <Camera className="w-10 h-10 text-slate-500 mx-auto mb-3" />
-            <h3 className="text-base font-medium text-slate-300">Kayıtlı Çekim Bulunmuyor</h3>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {filteredShoots.map((shoot) => {
-              const isExpanded = expandedShootId === shoot.id;
+        {/* TAB 1: ÇEKİM TAKVİMİ PANELİ */}
+        {activeTab === 'shoots' && (
+          loading ? (
+            <div className="flex justify-center items-center py-20">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500"></div>
+            </div>
+          ) : filteredShoots.length === 0 ? (
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-12 text-center">
+              <Camera className="w-10 h-10 text-slate-500 mx-auto mb-3" />
+              <h3 className="text-base font-medium text-slate-300">Kayıtlı Çekim Bulunmuyor</h3>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredShoots.map((shoot) => {
+                const isExpanded = expandedShootId === shoot.id;
 
-              return (
-                <div 
-                  key={shoot.id} 
-                  className="bg-slate-800 border border-slate-700/80 rounded-xl overflow-hidden transition duration-150 shadow-sm hover:border-slate-600"
-                >
-                  {/* KAPALI HALİ */}
-                  <div 
-                    onClick={() => toggleExpand(shoot.id)}
-                    className="p-3.5 cursor-pointer flex items-center justify-between gap-3 bg-slate-800 hover:bg-slate-700/50 transition"
-                  >
-                    <div className="flex items-center space-x-3 min-w-0 flex-1">
-                      <div className="p-2 bg-slate-700/60 rounded-lg text-indigo-400 shrink-0">
-                        <User className="w-4 h-4" />
-                      </div>
-                      <div className="truncate">
-                        <h3 className="font-semibold text-slate-100 text-sm truncate">
-                          {shoot.client_name}
-                        </h3>
-                        <p className="text-xs text-slate-400 truncate">
-                          {shoot.shoot_type}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-2 shrink-0 text-xs">
-                      <div className="hidden sm:flex items-center justify-center w-28 py-1 px-2 bg-slate-900/80 rounded-lg border border-slate-700/60 text-slate-200 font-medium">
-                        <Calendar className="w-3.5 h-3.5 text-indigo-400 mr-1 shrink-0" />
-                        <span>{shoot.date || 'Tarihsiz'}</span>
+                return (
+                  <div key={shoot.id} className="bg-slate-800 border border-slate-700/80 rounded-xl overflow-hidden transition duration-150 shadow-sm hover:border-slate-600">
+                    <div onClick={() => toggleExpand(shoot.id)} className="p-3.5 cursor-pointer flex items-center justify-between gap-3 bg-slate-800 hover:bg-slate-700/50 transition">
+                      <div className="flex items-center space-x-3 min-w-0 flex-1">
+                        <div className="p-2 bg-slate-700/60 rounded-lg text-indigo-400 shrink-0">
+                          <User className="w-4 h-4" />
+                        </div>
+                        <div className="truncate">
+                          <h3 className="font-semibold text-slate-100 text-sm truncate">{shoot.client_name}</h3>
+                          <p className="text-xs text-slate-400 truncate">{shoot.shoot_type}</p>
+                        </div>
                       </div>
 
-                      <div className={`hidden sm:flex items-center justify-center w-16 py-1 px-2 bg-slate-900/80 rounded-lg border border-slate-700/60 font-medium ${shoot.time ? 'text-slate-200' : 'text-slate-500'}`}>
-                        <Clock className={`w-3.5 h-3.5 mr-1 shrink-0 ${shoot.time ? 'text-indigo-400' : 'text-slate-600'}`} />
-                        <span>{shoot.time || '--:--'}</span>
-                      </div>
+                      <div className="flex items-center space-x-2 shrink-0 text-xs">
+                        <div className="hidden sm:flex items-center justify-center w-28 py-1 px-2 bg-slate-900/80 rounded-lg border border-slate-700/60 text-slate-200 font-medium">
+                          <Calendar className="w-3.5 h-3.5 text-indigo-400 mr-1 shrink-0" />
+                          <span>{shoot.date || 'Tarihsiz'}</span>
+                        </div>
 
-                      <div>{getStatusBadge(shoot.status)}</div>
+                        <div className={`hidden sm:flex items-center justify-center w-16 py-1 px-2 bg-slate-900/80 rounded-lg border border-slate-700/60 font-medium ${shoot.time ? 'text-slate-200' : 'text-slate-500'}`}>
+                          <Clock className={`w-3.5 h-3.5 mr-1 shrink-0 ${shoot.time ? 'text-indigo-400' : 'text-slate-600'}`} />
+                          <span>{shoot.time || '--:--'}</span>
+                        </div>
 
-                      <div className="text-slate-400 p-1">
-                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        <div>{getStatusBadge(shoot.status)}</div>
+
+                        <div className="text-slate-400 p-1">
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </div>
                       </div>
                     </div>
+
+                    {isExpanded && (
+                      <div className="p-4 bg-slate-900/90 border-t border-slate-700/60 space-y-3 text-xs">
+                        <div className="flex sm:hidden items-center gap-3 text-slate-300 pb-2 border-b border-slate-800">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>{shoot.date || 'Tarih Belirtilmedi'}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-slate-400">
+                            <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>{shoot.time || 'Saat Belirtilmedi'}</span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300">
+                          {shoot.client_phone && (
+                            <div className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-lg border border-slate-700/40">
+                              <Phone className="w-3.5 h-3.5 text-indigo-400" />
+                              <span>{shoot.client_phone}</span>
+                            </div>
+                          )}
+                          {shoot.client_email && (
+                            <div className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-lg border border-slate-700/40">
+                              <Mail className="w-3.5 h-3.5 text-indigo-400" />
+                              <span className="truncate">{shoot.client_email}</span>
+                            </div>
+                          )}
+                          {shoot.location && (
+                            <div className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-lg border border-slate-700/40 sm:col-span-2">
+                              <MapPin className="w-3.5 h-3.5 text-indigo-400" />
+                              <span>{shoot.location}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-lg border border-slate-700/40">
+                            <DollarSign className="w-3.5 h-3.5 text-green-400" />
+                            <span className="font-bold text-green-400">{shoot.price ? `₺${shoot.price}` : 'Ücretsiz / Belirtilmedi'}</span>
+                          </div>
+                        </div>
+
+                        {shoot.notes && (
+                          <div className="p-2.5 bg-slate-800/50 rounded-lg border border-slate-700/30 text-slate-300 italic">
+                            "{shoot.notes}"
+                          </div>
+                        )}
+
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                          <div className="flex space-x-2">
+                            {shoot.status !== 'completed' && (
+                              <button onClick={(e) => handleStatusChange(shoot.id, 'completed', e)} className="px-2.5 py-1 bg-green-950/80 hover:bg-green-900 text-green-300 border border-green-800 rounded-md transition flex items-center gap-1">
+                                <CheckCircle className="w-3 h-3" /> Tamamlandı
+                              </button>
+                            )}
+                            {shoot.status !== 'cancelled' && (
+                              <button onClick={(e) => handleStatusChange(shoot.id, 'cancelled', e)} className="px-2.5 py-1 bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-800 rounded-md transition flex items-center gap-1">
+                                <XCircle className="w-3 h-3" /> İptal
+                              </button>
+                            )}
+                            {(shoot.status === 'completed' || shoot.status === 'cancelled') && (
+                              <button onClick={(e) => handleStatusChange(shoot.id, 'planned', e)} className="px-2.5 py-1 bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded-md transition flex items-center gap-1">
+                                <RotateCcw className="w-3 h-3" /> Geri Al
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex space-x-1">
+                            <button onClick={(e) => handleOpenEditModal(shoot, e)} className="p-1.5 hover:bg-indigo-600/20 text-slate-400 hover:text-indigo-400 rounded transition" title="Düzenle">
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button onClick={(e) => handleDelete(shoot.id, e)} className="p-1.5 hover:bg-red-600/20 text-slate-400 hover:text-red-400 rounded transition" title="Sil">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
+                );
+              })}
+            </div>
+          )
+        )}
 
-                  {/* AÇILAN DETAY ALANI */}
-                  {isExpanded && (
-                    <div className="p-4 bg-slate-900/90 border-t border-slate-700/60 space-y-3 text-xs">
-                      <div className="flex sm:hidden items-center gap-3 text-slate-300 pb-2 border-b border-slate-800">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>{shoot.date || 'Tarih Belirtilmedi'}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-slate-400">
-                          <Clock className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>{shoot.time || 'Saat Belirtilmedi'}</span>
+        {/* TAB 2: MÜŞTERİ PORTFÖYÜ PANELİ */}
+        {activeTab === 'clients' && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Müşteri Listesi */}
+            <div className="md:col-span-1 space-y-2">
+              <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Müşteriler ({filteredClients.length})</h2>
+              {filteredClients.length === 0 ? (
+                <p className="text-xs text-slate-500 italic p-4 bg-slate-800/40 rounded-lg">Müşteri bulunamadı.</p>
+              ) : (
+                filteredClients.map(client => {
+                  const clientShoots = shoots.filter(s => s.client_id === client.id || s.client_name.toLowerCase() === client.name.toLowerCase());
+                  const isSelected = selectedClientForDetail?.id === client.id;
+
+                  return (
+                    <div
+                      key={client.id}
+                      onClick={() => setSelectedClientForDetail(client)}
+                      className={`p-3 rounded-xl border cursor-pointer transition flex justify-between items-center ${isSelected ? 'bg-indigo-950/60 border-indigo-500/80 shadow-md' : 'bg-slate-800 border-slate-700/70 hover:border-slate-500'}`}
+                    >
+                      <div>
+                        <h3 className="font-semibold text-slate-100 text-sm">{client.name}</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">{client.phone || 'Telefon yok'}</p>
+                      </div>
+                      <span className="text-xs font-medium px-2 py-0.5 bg-slate-900 rounded-full text-indigo-300 border border-indigo-900">
+                        {clientShoots.length} Çekim
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Müşteri Detay & Geçmiş Çekim Kartı */}
+            <div className="md:col-span-2">
+              {selectedClientForDetail ? (() => {
+                const clientShoots = shoots.filter(s => 
+                  s.client_id === selectedClientForDetail.id || 
+                  s.client_name.toLowerCase() === selectedClientForDetail.name.toLowerCase()
+                );
+                const totalSpent = clientShoots
+                  .filter(s => s.status === 'completed')
+                  .reduce((acc, s) => acc + (s.price || 0), 0);
+
+                return (
+                  <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-5">
+                    {/* Müşteri Başlık */}
+                    <div className="flex justify-between items-start pb-4 border-b border-slate-700">
+                      <div>
+                        <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                          <User className="w-5 h-5 text-indigo-400" />
+                          {selectedClientForDetail.name}
+                        </h2>
+                        <div className="flex flex-wrap gap-4 text-xs text-slate-400 mt-2">
+                          {selectedClientForDetail.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {selectedClientForDetail.phone}</span>}
+                          {selectedClientForDetail.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {selectedClientForDetail.email}</span>}
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300">
-                        {shoot.client_phone && (
-                          <div className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-lg border border-slate-700/40">
-                            <Phone className="w-3.5 h-3.5 text-indigo-400" />
-                            <span>{shoot.client_phone}</span>
-                          </div>
-                        )}
-                        {shoot.client_email && (
-                          <div className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-lg border border-slate-700/40">
-                            <Mail className="w-3.5 h-3.5 text-indigo-400" />
-                            <span className="truncate">{shoot.client_email}</span>
-                          </div>
-                        )}
-                        {shoot.location && (
-                          <div className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-lg border border-slate-700/40 sm:col-span-2">
-                            <MapPin className="w-3.5 h-3.5 text-indigo-400" />
-                            <span>{shoot.location}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-lg border border-slate-700/40">
-                          <DollarSign className="w-3.5 h-3.5 text-green-400" />
-                          <span className="font-bold text-green-400">{shoot.price ? `₺${shoot.price}` : 'Ücretsiz / Belirtilmedi'}</span>
-                        </div>
+                      {/* Toplam Hacim */}
+                      <div className="bg-slate-900 p-3 rounded-lg border border-slate-700 text-right">
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Tamamlanan Hacim</span>
+                        <span className="text-base font-bold text-green-400">₺{totalSpent}</span>
                       </div>
+                    </div>
 
-                      {shoot.notes && (
-                        <div className="p-2.5 bg-slate-800/50 rounded-lg border border-slate-700/30 text-slate-300 italic">
-                          "{shoot.notes}"
+                    {/* Çekim Geçmişi */}
+                    <div>
+                      <h3 className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-3">
+                        <History className="w-4 h-4 text-indigo-400" />
+                        GEÇMİŞ İŞLER VE GELECEK PLANLAR ({clientShoots.length})
+                      </h3>
+
+                      {clientShoots.length === 0 ? (
+                        <p className="text-xs text-slate-500 italic p-4 bg-slate-900/40 rounded-lg">Bu müşteriye ait kayıtlı çekim bulunmuyor.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {clientShoots.map(s => (
+                            <div key={s.id} className="p-3 bg-slate-900/80 rounded-lg border border-slate-700/60 text-xs flex justify-between items-center">
+                              <div>
+                                <span className="font-semibold text-slate-200 block">{s.shoot_type}</span>
+                                <span className="text-slate-400">{s.date || 'Tarihsiz'} {s.time ? `• ${s.time}` : ''} {s.location ? `• ${s.location}` : ''}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="font-bold text-green-400">₺{s.price || 0}</span>
+                                {getStatusBadge(s.status)}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
-
-                      <div className="flex justify-between items-center pt-2 border-t border-slate-800">
-                        <div className="flex space-x-2">
-                          {shoot.status !== 'completed' && (
-                            <button
-                              onClick={(e) => handleStatusChange(shoot.id, 'completed', e)}
-                              className="px-2.5 py-1 bg-green-950/80 hover:bg-green-900 text-green-300 border border-green-800 rounded-md transition flex items-center gap-1"
-                            >
-                              <CheckCircle className="w-3 h-3" /> Tamamlandı
-                            </button>
-                          )}
-
-                          {shoot.status !== 'cancelled' && (
-                            <button
-                              onClick={(e) => handleStatusChange(shoot.id, 'cancelled', e)}
-                              className="px-2.5 py-1 bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-800 rounded-md transition flex items-center gap-1"
-                            >
-                              <XCircle className="w-3 h-3" /> İptal
-                            </button>
-                          )}
-
-                          {(shoot.status === 'completed' || shoot.status === 'cancelled') && (
-                            <button
-                              onClick={(e) => handleStatusChange(shoot.id, 'planned', e)}
-                              className="px-2.5 py-1 bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded-md transition flex items-center gap-1"
-                            >
-                              <RotateCcw className="w-3 h-3" /> Geri Al
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="flex space-x-1">
-                          <button
-                            onClick={(e) => handleOpenEditModal(shoot, e)}
-                            className="p-1.5 hover:bg-indigo-600/20 text-slate-400 hover:text-indigo-400 rounded transition"
-                            title="Düzenle"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => handleDelete(shoot.id, e)}
-                            className="p-1.5 hover:bg-red-600/20 text-slate-400 hover:text-red-400 rounded transition"
-                            title="Sil"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
                     </div>
-                  )}
+                  </div>
+                );
+              })() : (
+                <div className="bg-slate-800/40 border border-slate-700/60 rounded-xl p-12 text-center text-slate-400">
+                  <Users className="w-10 h-10 mx-auto mb-3 text-slate-500" />
+                  <p className="text-sm">Detaylarını ve tüm geçmiş işlerini görmek istediğiniz müşterinin üzerine tıklayın.</p>
                 </div>
-              );
-            })}
+              )}
+            </div>
           </div>
         )}
       </main>
@@ -500,17 +578,10 @@ export default function App() {
                 <Camera className="w-4 h-4 text-indigo-400" />
                 {editingShootId ? 'Çekim Düzenle' : 'Yeni Çekim Ekle'}
               </h2>
-              <button 
-                onClick={() => { setIsModalOpen(false); resetForm(); }}
-                className="text-slate-400 hover:text-white"
-              >
-                ✕
-              </button>
+              <button onClick={() => { setIsModalOpen(false); resetForm(); }} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-3 text-xs">
-              
-              {/* MÜŞTERİ SEÇİM ALANI */}
               <div>
                 <label className="block font-medium text-slate-300 mb-1">Müşteri Profili Seçin</label>
                 <select
@@ -520,9 +591,7 @@ export default function App() {
                 >
                   <option value="new">+ Yeni Müşteri Oluştur</option>
                   {clients.map(c => (
-                    <option key={c.id} value={c.id}>
-                      👤 {c.name} {c.phone ? `(${c.phone})` : ''}
-                    </option>
+                    <option key={c.id} value={c.id}>👤 {c.name} {c.phone ? `(${c.phone})` : ''}</option>
                   ))}
                 </select>
               </div>
@@ -640,19 +709,8 @@ export default function App() {
               </div>
 
               <div className="flex space-x-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => { setIsModalOpen(false); resetForm(); }}
-                  className="w-1/2 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-lg transition"
-                >
-                  İptal
-                </button>
-                <button
-                  type="submit"
-                  className="w-1/2 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition"
-                >
-                  {editingShootId ? 'Güncelle' : 'Kaydet'}
-                </button>
+                <button type="button" onClick={() => { setIsModalOpen(false); resetForm(); }} className="w-1/2 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-lg transition">İptal</button>
+                <button type="submit" className="w-1/2 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition">{editingShootId ? 'Güncelle' : 'Kaydet'}</button>
               </div>
             </form>
           </div>
