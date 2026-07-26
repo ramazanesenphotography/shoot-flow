@@ -22,7 +22,9 @@ import {
   Users,
   History,
   UserPlus,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ExternalLink,
+  Link as LinkIcon
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 
@@ -48,6 +50,7 @@ interface Shoot {
   price: number;
   status: 'planned' | 'completed' | 'cancelled';
   notes: string;
+  drive_link?: string;
 }
 
 export default function App() {
@@ -92,7 +95,8 @@ export default function App() {
     date: '',
     time: '',
     price: '',
-    notes: ''
+    notes: '',
+    drive_link: ''
   });
 
   useEffect(() => {
@@ -192,7 +196,8 @@ export default function App() {
       date: '',
       time: '',
       price: '',
-      notes: ''
+      notes: '',
+      drive_link: ''
     });
     setEditingShootId(null);
   };
@@ -208,7 +213,6 @@ export default function App() {
     setIsClientModalOpen(true);
   };
 
-  // Doğrudan Müşteri Kaydetme
   const handleClientSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -339,7 +343,8 @@ export default function App() {
       date: shoot.date || '',
       time: shoot.time || '',
       price: shoot.price ? shoot.price.toString() : '',
-      notes: shoot.notes || ''
+      notes: shoot.notes || '',
+      drive_link: shoot.drive_link || ''
     });
     setIsShootModalOpen(true);
   };
@@ -551,6 +556,21 @@ export default function App() {
                           </div>
                         </div>
 
+                        {/* Drive / Galeri Linki Butonu */}
+                        {shoot.drive_link && (
+                          <div className="pt-1">
+                            <a
+                              href={shoot.drive_link.startsWith('http') ? shoot.drive_link : `https://${shoot.drive_link}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-900/50 hover:bg-blue-800/80 text-blue-200 border border-blue-700/60 rounded-lg font-medium transition"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                              <span>Drive / Galeri Linkini Aç</span>
+                            </a>
+                          </div>
+                        )}
+
                         {shoot.notes && (
                           <div className="p-2.5 bg-slate-800/50 rounded-lg border border-slate-700/30 text-slate-300 italic">
                             "{shoot.notes}"
@@ -686,12 +706,24 @@ export default function App() {
                       ) : (
                         <div className="space-y-2">
                           {clientShoots.map(s => (
-                            <div key={s.id} className="p-3 bg-slate-900/80 rounded-lg border border-slate-700/60 text-xs flex justify-between items-center">
+                            <div key={s.id} className="p-3 bg-slate-900/80 rounded-lg border border-slate-700/60 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                               <div>
                                 <span className="font-semibold text-slate-200 block">{s.shoot_type}</span>
                                 <span className="text-slate-400">{s.date || 'Tarihsiz'} {s.time ? `• ${s.time}` : ''} {s.location ? `• ${s.location}` : ''}</span>
                               </div>
+
                               <div className="flex items-center gap-3">
+                                {s.drive_link && (
+                                  <a
+                                    href={s.drive_link.startsWith('http') ? s.drive_link : `https://${s.drive_link}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded transition font-medium text-[11px]"
+                                  >
+                                    <LinkIcon className="w-3 h-3 text-blue-400" />
+                                    <span>Galeri Linki</span>
+                                  </a>
+                                )}
                                 <span className="font-bold text-green-400">₺{s.price || 0}</span>
                                 {getStatusBadge(s.status)}
                               </div>
@@ -930,6 +962,19 @@ export default function App() {
                   name="price"
                   placeholder="0"
                   value={formData.price}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* DRIVE / GALERİ LİNKİ GİRİŞ KUTUSU */}
+              <div>
+                <label className="block font-medium text-slate-300 mb-1">Drive / Galeri Bağlantısı (Link)</label>
+                <input
+                  type="url"
+                  name="drive_link"
+                  placeholder="https://drive.google.com/..."
+                  value={formData.drive_link}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:ring-2 focus:ring-indigo-500"
                 />
