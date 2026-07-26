@@ -20,7 +20,9 @@ import {
   ChevronDown,
   ChevronUp,
   Users,
-  History
+  History,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 
@@ -29,6 +31,7 @@ interface Client {
   name: string;
   phone: string;
   email: string;
+  avatar_url?: string;
   created_at?: string;
 }
 
@@ -66,10 +69,15 @@ export default function App() {
   const [editingShootId, setEditingShootId] = useState<string | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string>('new');
 
+  // Resim Yükleme State
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
   const [formData, setFormData] = useState({
     client_name: '',
     client_phone: '',
     client_email: '',
+    avatar_url: '',
     shoot_type: 'Portre / Konsept',
     location: '',
     date: '',
@@ -105,12 +113,45 @@ export default function App() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setAvatarFile(e.target.files[0]);
+    }
+  };
+
+  const uploadAvatar = async (file: File): Promise<string | null> => {
+    try {
+      setUploadingAvatar(true);
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('client-avatars')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('client-avatars')
+        .getPublicUrl(filePath);
+
+      return data.publicUrl;
+    } catch (error) {
+      console.error('Avatar yükleme hatası:', error);
+      return null;
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const handleClientSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     setSelectedClientId(val);
+    setAvatarFile(null);
 
     if (val === 'new') {
-      setFormData(prev => ({ ...prev, client_name: '', client_phone: '', client_email: '' }));
+      setFormData(prev => ({ ...prev, client_name: '', client_phone: '', client_email: '', avatar_url: '' }));
     } else {
       const selected = clients.find(c => c.id === val);
       if (selected) {
@@ -118,7 +159,8 @@ export default function App() {
           ...prev,
           client_name: selected.name,
           client_phone: selected.phone || '',
-          client_email: selected.email || ''
+          client_email: selected.email || '',
+          avatar_url: selected.avatar_url || ''
         }));
       }
     }
@@ -126,10 +168,12 @@ export default function App() {
 
   const resetForm = () => {
     setSelectedClientId('new');
+    setAvatarFile(null);
     setFormData({
       client_name: '',
       client_phone: '',
       client_email: '',
+      avatar_url: '',
       shoot_type: 'Portre / Konsept',
       location: '',
       date: '',
@@ -149,10 +193,15 @@ export default function App() {
     e.stopPropagation();
     setEditingShootId(shoot.id);
     setSelectedClientId(shoot.client_id || 'new');
+    setAvatarFile(null);
+
+    const client = clients.find(c => c.id === shoot.client_id);
+
     setFormData({
       client_name: shoot.client_name || '',
       client_phone: shoot.client_phone || '',
       client_email: shoot.client_email || '',
+      avatar_url: client?.avatar_url || '',
       shoot_type: shoot.shoot_type || 'Portre / Konsept',
       location: shoot.location || '',
       date: shoot.date || '',
@@ -166,18 +215,36 @@ export default function App() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      let avatarUrl = formData.avatar_url;
+
+      // Eğer yeni resim seçilmişse yükle
+      if (avatarFile) {
+        const uploadedUrl = await uploadAvatar(avatarFile);
+        if (uploadedUrl) avatarUrl = uploadedUrl;
+      }
+
       let finalClientId = selectedClientId !== 'new' ? selectedClientId : undefined;
 
+      // Yeni müşteri kaydı
       if (selectedClientId === 'new' && formData.client_name) {
         const { data: newClient } = await supabase
           .from('clients')
-          .insert([{ name: formData.client_name, phone: formData.client_phone, email: formData.client_email }])
+          .insert([{ 
+            name: formData.client_name, 
+            phone: formData.client_phone, 
+            email: formData.client_email,
+            avatar_url: avatarUrl 
+          }])
           .select();
 
         if (newClient && newClient[0]) {
           finalClientId = newClient[0].id;
           setClients(prev => [...prev, newClient[0]]);
         }
+      } else if (finalClientId && avatarUrl !== formData.avatar_url) {
+        // Var olan müşterinin resmini güncelle
+        await supabase.from('clients').update({ avatar_url: avatarUrl }).eq('id', finalClientId);
+        setClients(clients.map(c => c.id === finalClientId ? { ...c, avatar_url: avatarUrl } : c));
       }
 
       const shootPayload = {
@@ -275,7 +342,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* PANEL SEKMELERİ */}
           <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-700">
             <button
               onClick={() => setActiveTab('shoots')}
@@ -351,14 +417,19 @@ export default function App() {
             <div className="space-y-2">
               {filteredShoots.map((shoot) => {
                 const isExpanded = expandedShootId === shoot.id;
+                const client = clients.find(c => c.id === shoot.client_id || c.name.toLowerCase() === shoot.client_name.toLowerCase());
 
                 return (
                   <div key={shoot.id} className="bg-slate-800 border border-slate-700/80 rounded-xl overflow-hidden transition duration-150 shadow-sm hover:border-slate-600">
                     <div onClick={() => toggleExpand(shoot.id)} className="p-3.5 cursor-pointer flex items-center justify-between gap-3 bg-slate-800 hover:bg-slate-700/50 transition">
                       <div className="flex items-center space-x-3 min-w-0 flex-1">
-                        <div className="p-2 bg-slate-700/60 rounded-lg text-indigo-400 shrink-0">
-                          <User className="w-4 h-4" />
-                        </div>
+                        {client?.avatar_url ? (
+                          <img src={client.avatar_url} alt={shoot.client_name} className="w-9 h-9 rounded-lg object-cover shrink-0 border border-slate-600" />
+                        ) : (
+                          <div className="p-2 bg-slate-700/60 rounded-lg text-indigo-400 shrink-0">
+                            <User className="w-4 h-4" />
+                          </div>
+                        )}
                         <div className="truncate">
                           <h3 className="font-semibold text-slate-100 text-sm truncate">{shoot.client_name}</h3>
                           <p className="text-xs text-slate-400 truncate">{shoot.shoot_type}</p>
@@ -484,11 +555,20 @@ export default function App() {
                       onClick={() => setSelectedClientForDetail(client)}
                       className={`p-3 rounded-xl border cursor-pointer transition flex justify-between items-center ${isSelected ? 'bg-indigo-950/60 border-indigo-500/80 shadow-md' : 'bg-slate-800 border-slate-700/70 hover:border-slate-500'}`}
                     >
-                      <div>
-                        <h3 className="font-semibold text-slate-100 text-sm">{client.name}</h3>
-                        <p className="text-xs text-slate-400 mt-0.5">{client.phone || 'Telefon yok'}</p>
+                      <div className="flex items-center space-x-3">
+                        {client.avatar_url ? (
+                          <img src={client.avatar_url} alt={client.name} className="w-10 h-10 rounded-lg object-cover border border-slate-600 shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-slate-700/80 flex items-center justify-center text-indigo-400 shrink-0">
+                            <User className="w-5 h-5" />
+                          </div>
+                        )}
+                        <div>
+                          <h3 className="font-semibold text-slate-100 text-sm">{client.name}</h3>
+                          <p className="text-xs text-slate-400 mt-0.5">{client.phone || 'Telefon yok'}</p>
+                        </div>
                       </div>
-                      <span className="text-xs font-medium px-2 py-0.5 bg-slate-900 rounded-full text-indigo-300 border border-indigo-900">
+                      <span className="text-xs font-medium px-2 py-0.5 bg-slate-900 rounded-full text-indigo-300 border border-indigo-900 shrink-0">
                         {clientShoots.length} Çekim
                       </span>
                     </div>
@@ -497,7 +577,7 @@ export default function App() {
               )}
             </div>
 
-            {/* Müşteri Detay & Geçmiş Çekim Kartı */}
+            {/* Müşteri Detay Kartı */}
             <div className="md:col-span-2">
               {selectedClientForDetail ? (() => {
                 const clientShoots = shoots.filter(s => 
@@ -510,27 +590,30 @@ export default function App() {
 
                 return (
                   <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-5">
-                    {/* Müşteri Başlık */}
                     <div className="flex justify-between items-start pb-4 border-b border-slate-700">
-                      <div>
-                        <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-                          <User className="w-5 h-5 text-indigo-400" />
-                          {selectedClientForDetail.name}
-                        </h2>
-                        <div className="flex flex-wrap gap-4 text-xs text-slate-400 mt-2">
-                          {selectedClientForDetail.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {selectedClientForDetail.phone}</span>}
-                          {selectedClientForDetail.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {selectedClientForDetail.email}</span>}
+                      <div className="flex items-center space-x-4">
+                        {selectedClientForDetail.avatar_url ? (
+                          <img src={selectedClientForDetail.avatar_url} alt={selectedClientForDetail.name} className="w-16 h-16 rounded-xl object-cover border-2 border-indigo-500/50 shadow-md" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-xl bg-slate-700 flex items-center justify-center text-indigo-400 border border-slate-600">
+                            <User className="w-8 h-8" />
+                          </div>
+                        )}
+                        <div>
+                          <h2 className="text-lg font-bold text-slate-100">{selectedClientForDetail.name}</h2>
+                          <div className="flex flex-wrap gap-3 text-xs text-slate-400 mt-1">
+                            {selectedClientForDetail.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-indigo-400" /> {selectedClientForDetail.phone}</span>}
+                            {selectedClientForDetail.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5 text-indigo-400" /> {selectedClientForDetail.email}</span>}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Toplam Hacim */}
                       <div className="bg-slate-900 p-3 rounded-lg border border-slate-700 text-right">
                         <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Tamamlanan Hacim</span>
                         <span className="text-base font-bold text-green-400">₺{totalSpent}</span>
                       </div>
                     </div>
 
-                    {/* Çekim Geçmişi */}
                     <div>
                       <h3 className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-3">
                         <History className="w-4 h-4 text-indigo-400" />
@@ -594,6 +677,26 @@ export default function App() {
                     <option key={c.id} value={c.id}>👤 {c.name} {c.phone ? `(${c.phone})` : ''}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Müşteri Profil Fotoğrafı Yükleme */}
+              <div>
+                <label className="block font-medium text-slate-300 mb-1">Müşteri Profil Fotoğrafı</label>
+                <div className="flex items-center gap-3 bg-slate-900 p-2.5 rounded-lg border border-slate-700">
+                  {formData.avatar_url ? (
+                    <img src={formData.avatar_url} alt="Müşteri" className="w-10 h-10 rounded-lg object-cover border border-slate-600" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-slate-500">
+                      <ImageIcon className="w-5 h-5" />
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
+                  />
+                </div>
               </div>
 
               <div>
@@ -710,7 +813,9 @@ export default function App() {
 
               <div className="flex space-x-2 pt-2">
                 <button type="button" onClick={() => { setIsModalOpen(false); resetForm(); }} className="w-1/2 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-lg transition">İptal</button>
-                <button type="submit" className="w-1/2 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition">{editingShootId ? 'Güncelle' : 'Kaydet'}</button>
+                <button type="submit" disabled={uploadingAvatar} className="w-1/2 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition">
+                  {uploadingAvatar ? 'Resim Yükleniyor...' : editingShootId ? 'Güncelle' : 'Kaydet'}
+                </button>
               </div>
             </form>
           </div>
