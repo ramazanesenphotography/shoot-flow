@@ -58,10 +58,7 @@ interface Shoot {
 }
 
 export default function App() {
-  // Auth State
   const [session, setSession] = useState<any>(null);
-  const [isApproved, setIsApproved] = useState<boolean>(false);
-  const [isEmailConfirmed, setIsEmailConfirmed] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'verify'>('login');
   
@@ -109,19 +106,12 @@ export default function App() {
     drive_link: ''
   });
 
-  // Oturum ve Çift Onay Kontrolü
   useEffect(() => {
     checkUserSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession);
-      if (currentSession) {
-        verifyUserStatus(currentSession);
-      } else {
-        setIsApproved(false);
-        setIsEmailConfirmed(false);
-        setAuthLoading(false);
-      }
+      setAuthLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -131,49 +121,18 @@ export default function App() {
     try {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       setSession(currentSession);
-      if (currentSession) {
-        await verifyUserStatus(currentSession);
-      } else {
-        setAuthLoading(false);
-      }
     } catch (err) {
       console.error(err);
-      setAuthLoading(false);
-    }
-  }
-
-  async function verifyUserStatus(currentSession: any) {
-    try {
-      // Supabase sunucusundan güncel kullanıcı bilgilerini çek
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-
-      // 1. E-posta Onay Kontrolü (Mail doğrulama tıklandıysa veya Admin elle onayladıysa)
-      const emailConfirmed = !!(currentUser && currentUser.email_confirmed_at);
-      setIsEmailConfirmed(emailConfirmed);
-
-      // 2. Yönetici Onay Kontrolü
-      const { data } = await supabase
-        .from('user_profiles')
-        .select('is_approved')
-        .eq('id', currentSession.user.id)
-        .single();
-
-      const approved = !!(data && data.is_approved);
-      setIsApproved(approved);
-
-    } catch (e) {
-      console.error('Onay kontrol hatası:', e);
-      setIsApproved(false);
     } finally {
       setAuthLoading(false);
     }
   }
 
   useEffect(() => {
-    if (session && isApproved && isEmailConfirmed) {
+    if (session) {
       loadData();
     }
-  }, [session, isApproved, isEmailConfirmed]);
+  }, [session]);
 
   async function loadData() {
     try {
@@ -190,7 +149,6 @@ export default function App() {
     }
   }
 
-  // Auth Aksiyonları
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -201,7 +159,7 @@ export default function App() {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         if (data.session) {
-          await verifyUserStatus(data.session);
+          setSession(data.session);
         }
       } else if (authMode === 'register') {
         const { error } = await supabase.auth.signUp({ email, password });
@@ -219,7 +177,7 @@ export default function App() {
         if (error) throw error;
 
         if (data.session) {
-          await verifyUserStatus(data.session);
+          setSession(data.session);
         }
       }
     } catch (error: any) {
@@ -230,8 +188,6 @@ export default function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
-    setIsApproved(false);
-    setIsEmailConfirmed(false);
   };
 
   const toggleExpand = (id: string) => {
@@ -509,7 +465,7 @@ export default function App() {
     );
   }
 
-  // 🔴 1. OTURUM HİÇ AÇILMAMIŞSA
+  // 1. OTURUM AÇIK DEĞİLSE GİRİŞ EKRANI
   if (!session) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -560,7 +516,7 @@ export default function App() {
                   required
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value)}
-                  placeholder="Maile gelen 6 haneli kod"
+                  placeholder="Maile gelen kod veya boşsa geç"
                   className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:ring-2 focus:ring-indigo-500 text-center tracking-widest font-bold"
                 />
               </div>
@@ -570,7 +526,7 @@ export default function App() {
               type="submit"
               className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition shadow-lg shadow-indigo-600/30 text-xs"
             >
-              {authMode === 'login' ? 'Giriş Yap' : authMode === 'register' ? 'Kayıt Ol ve Kod Gönder' : 'Kodu Doğrula'}
+              {authMode === 'login' ? 'Giriş Yap' : authMode === 'register' ? 'Kayıt Ol' : 'Kodu Doğrula ve Giriş Yap'}
             </button>
           </form>
 
@@ -583,7 +539,7 @@ export default function App() {
               }}
               className="text-xs text-indigo-400 hover:underline"
             >
-              {authMode === 'login' ? 'Hesabınız yok mu? Kayıt Talebi Oluştur' : 'Zaten hesabınız var mı? Giriş Yap'}
+              {authMode === 'login' ? 'Hesabınız yok mu? Kayıt Olun' : 'Zaten hesabınız var mı? Giriş Yap'}
             </button>
           </div>
         </div>
@@ -591,110 +547,7 @@ export default function App() {
     );
   }
 
-  // 🟡 2. OTURUM AÇIK AMA ONAYLAR EKSİKSE (Şık Canlı Durum Paneli)
-  if (session && (!isApproved || !isEmailConfirmed)) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-6">
-          <div className="text-center space-y-1">
-            <div className="inline-flex p-3 bg-indigo-600/20 text-indigo-400 rounded-xl border border-indigo-500/30 mb-1">
-              <ShieldCheck className="w-8 h-8" />
-            </div>
-            <h2 className="text-lg font-bold text-white">Hesap Onay Durumu</h2>
-            <p className="text-xs text-slate-400">Sisteme erişebilmeniz için aşağıdaki 2 adımın tamamlanması gerekir.</p>
-          </div>
-
-          <div className="space-y-3">
-            {/* ADIM 1: E-POSTA DOĞRULAMASI */}
-            <div className={`p-4 rounded-xl border flex items-start gap-3 transition ${isEmailConfirmed ? 'bg-emerald-950/40 border-emerald-700/60' : 'bg-amber-950/40 border-amber-700/60'}`}>
-              <div className="mt-0.5 shrink-0">
-                {isEmailConfirmed ? (
-                  <CheckCircle className="w-5 h-5 text-emerald-400" />
-                ) : (
-                  <Clock className="w-5 h-5 text-amber-400 animate-pulse" />
-                )}
-              </div>
-              <div className="text-xs space-y-1 flex-1">
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-slate-200">1. E-posta Kodu Doğrulaması</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isEmailConfirmed ? 'bg-emerald-900/80 text-emerald-300' : 'bg-amber-900/80 text-amber-300'}`}>
-                    {isEmailConfirmed ? 'DOĞRULANDI' : 'BEKLİYOR'}
-                  </span>
-                </div>
-                <p className="text-slate-400 leading-relaxed">
-                  {isEmailConfirmed 
-                    ? 'E-posta adresiniz başarıyla doğrulandı.' 
-                    : 'E-postanıza gelen kodu girin ya da yöneticinin elle onaylamasını bekleyin.'}
-                </p>
-              </div>
-            </div>
-
-            {/* ADIM 2: YÖNETİCİ ONAYI */}
-            <div className={`p-4 rounded-xl border flex items-start gap-3 transition ${isApproved ? 'bg-emerald-950/40 border-emerald-700/60' : 'bg-amber-950/40 border-amber-700/60'}`}>
-              <div className="mt-0.5 shrink-0">
-                {isApproved ? (
-                  <CheckCircle className="w-5 h-5 text-emerald-400" />
-                ) : (
-                  <Lock className="w-5 h-5 text-amber-400" />
-                )}
-              </div>
-              <div className="text-xs space-y-1 flex-1">
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-slate-200">2. Yönetici (Admin) Onayı</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isApproved ? 'bg-emerald-900/80 text-emerald-300' : 'bg-amber-900/80 text-amber-300'}`}>
-                    {isApproved ? 'ONAYLANDI' : 'ONAY BEKLİYOR'}
-                  </span>
-                </div>
-                <p className="text-slate-400 leading-relaxed">
-                  {isApproved 
-                    ? 'Yönetici hesabınızı onayladı.' 
-                    : 'Yöneticinin hesabınızı aktifleştirmesi bekleniyor.'}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {!isEmailConfirmed && (
-            <div className="p-3 bg-slate-900/80 border border-slate-700 rounded-xl space-y-2 text-xs">
-              <span className="text-slate-300 font-medium block">Mail Kodunu Girin (Varsa):</span>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value)}
-                  placeholder="6 Haneli Kod"
-                  className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-center font-bold tracking-widest"
-                />
-                <button
-                  onClick={handleAuth}
-                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium shrink-0"
-                >
-                  Doğrula
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={() => checkUserSession()}
-              className="w-1/2 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition text-xs font-medium"
-            >
-              Durumu Yenile
-            </button>
-            <button
-              onClick={handleLogout}
-              className="w-1/2 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition text-xs font-medium"
-            >
-              Çıkış Yap
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 🟢 3. İKİ ONAY DA TAMAMSA (ANA UYGULAMA PANELİ)
+  // 2. OTURUM AÇIKSA DOĞRUDAN CRM YÖNETİM PANELİ AÇILIR
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
       <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-10">
@@ -1280,7 +1133,7 @@ export default function App() {
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
-
+              
               <div>
                 <label className="block font-medium text-slate-300 mb-1">Drive / Galeri Bağlantısı (Link)</label>
                 <input
