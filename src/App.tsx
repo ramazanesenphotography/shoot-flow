@@ -416,7 +416,7 @@ export default function App() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
-        return <span className="inline-flex items-center justify-center w-28 py-1 rounded-full text-xs font-medium bg-green-900/40 text-green-300 border border-green-700/50"><CheckCircle className="w-3 h-3 mr-1" /> Tamamlandı</span>;
+        return <span className="inline-flex items-center justify-center w-28 py-1 rounded-full text-xs font-medium bg-green-900/40 text-green-300 border border-green-700/50"><CheckCircle className="w-3 h-3 mr-1" /> Completed</span>;
       case 'cancelled':
         return <span className="inline-flex items-center justify-center w-28 py-1 rounded-full text-xs font-medium bg-red-900/40 text-red-300 border border-red-700/50"><XCircle className="w-3 h-3 mr-1" /> Cancelled</span>;
       default:
@@ -573,7 +573,7 @@ export default function App() {
               >
                 <option value="all">All Statuses</option>
                 <option value="planned">Planned</option>
-                <option value="completed">Tamamlandı</option>
+                <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
@@ -702,7 +702,7 @@ export default function App() {
                           <div className="flex space-x-2">
                             {shoot.status !== 'completed' && (
                               <button onClick={(e) => handleStatusChange(shoot.id, 'completed', e)} className="px-2.5 py-1 bg-green-950/80 hover:bg-green-900 text-green-300 border border-green-800 rounded-md transition flex items-center gap-1">
-                                <CheckCircle className="w-3 h-3" /> Tamamlandı
+                                <CheckCircle className="w-3 h-3" /> Complete
                               </button>
                             )}
                             {shoot.status !== 'cancelled' && (
